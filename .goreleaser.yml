@@ -53,7 +53,7 @@ brews:
       name: goreleaserbot
       email: bot@goreleaser.com
 
-    folder: Formula
+    directory: Formula
     homepage: "https://github.com/m44rten1/sprout"
     description: "A Git worktree helper CLI tool"
     license: "MIT"
