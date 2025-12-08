@@ -28,8 +28,3 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # You need to create a PAT with `repo` scope and add it as a secret named GH_PAT
-          # if you want to push to a separate homebrew tap repository.
-          # For now, we'll assume GITHUB_TOKEN is enough if the tap is in the same repo (which it isn't).
-          # So we need a PAT.
-          # I'll add a comment about this.
