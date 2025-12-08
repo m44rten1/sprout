@@ -1,0 +1,80 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X github.com/m44rten1/sprout/cmd.version={{.Version}} -X github.com/m44rten1/sprout/cmd.commit={{.Commit}} -X github.com/m44rten1/sprout/cmd.date={{.Date}}
+
+archives:
+  - format: tar.gz
+    # this name template makes the OS and Arch compatible with the results of uname.
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    # use zip for windows.
+    format_overrides:
+    - goos: windows
+      format: zip
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+
+brews:
+  - name: sprout
+    repository:
+      owner: m44rten1
+      name: homebrew-easy-checkout # Assuming user wants to use the same tap or a new one?
+      # The user said "setup something simular to get this repo on brew" and "just like in the easy-checkout project".
+      # easy-checkout uses `homebrew-easy-checkout`.
+      # I should probably ask if they want `homebrew-sprout` or add to `homebrew-easy-checkout`.
+      # But standard practice is `homebrew-tap` or `homebrew-sprout`.
+      # Let's assume `homebrew-sprout` for now, or maybe `homebrew-tap` if they have one.
+      # Actually, looking at `homebrew-easy-checkout`, it seems to be a dedicated repo for that formula.
+      # So I should probably configure it to push to `m44rten1/homebrew-sprout`.
+      # I'll set it to that, and the user will need to create that repo.
+
+    # Wait, if I use `homebrew-easy-checkout` repo, I can put multiple formulas there?
+    # Usually yes. Let's try to be smart. If the user has `homebrew-easy-checkout`, maybe they want a shared `homebrew-tap`?
+    # But the repo name is specific.
+    # I'll configure it for `m44rten1/homebrew-sprout` as the safest default for a new tool.
+
+    repository:
+      owner: m44rten1
+      name: homebrew-sprout
+
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+
+    folder: Formula
+    homepage: "https://github.com/m44rten1/sprout"
+    description: "A Git worktree helper CLI tool"
+    license: "MIT"
+
+    # Your custom install instruction
+    install: |
+      bin.install "sprout"
