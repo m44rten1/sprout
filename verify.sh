@@ -28,6 +28,19 @@ if [ ! -d "$WORKTREE_PATH" ]; then
     exit 1
 fi
 
+# Ensure no upstream is configured for the new branch
+set +e
+git rev-parse --abbrev-ref --symbolic-full-name feat/test@{upstream} >/dev/null 2>&1
+UPSTREAM_STATUS=$?
+set -e
+
+if [ "$UPSTREAM_STATUS" -eq 0 ]; then
+    echo "Upstream unexpectedly configured for feat/test"
+    exit 1
+else
+    echo "Upstream correctly not configured for feat/test"
+fi
+
 # Test list
 echo "Testing list..."
 $SPROUT_BIN list

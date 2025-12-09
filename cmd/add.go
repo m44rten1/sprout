@@ -52,8 +52,15 @@ var addCmd = &cobra.Command{
 		// Check if branch exists locally
 		localExists, _ := git.LocalBranchExists(repoRoot, branch)
 
-		var gitArgs []string
-		gitArgs = append(gitArgs, "worktree", "add", worktreePath)
+		// Build git worktree add command.
+		gitArgs := []string{"worktree", "add"}
+
+		// Only new branches should avoid configuring an upstream.
+		if !localExists {
+			gitArgs = append(gitArgs, "--no-track")
+		}
+
+		gitArgs = append(gitArgs, worktreePath)
 
 		if localExists {
 			// Branch exists locally, just checkout
@@ -64,7 +71,7 @@ var addCmd = &cobra.Command{
 			exists, _ := git.BranchExists(repoRoot, remoteBranch)
 
 			if exists {
-				gitArgs = append(gitArgs, remoteBranch, "-b", branch)
+				gitArgs = append(gitArgs, "-b", branch, remoteBranch)
 			} else {
 				// Check if origin/main exists
 				if valid, _ := git.BranchExists(repoRoot, "main"); valid {
