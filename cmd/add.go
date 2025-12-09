@@ -49,30 +49,38 @@ var addCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// Check if remote branch exists
-		remoteBranch := "origin/" + branch
-		exists, _ := git.BranchExists(repoRoot, remoteBranch)
+		// Check if branch exists locally
+		localExists, _ := git.LocalBranchExists(repoRoot, branch)
 
 		var gitArgs []string
 		gitArgs = append(gitArgs, "worktree", "add", worktreePath)
 
-		if exists {
-			gitArgs = append(gitArgs, remoteBranch, "-b", branch)
+		if localExists {
+			// Branch exists locally, just checkout
+			gitArgs = append(gitArgs, branch)
 		} else {
-			// Check if origin/main exists
-			if valid, _ := git.BranchExists(repoRoot, "main"); valid {
-				// Check if it's remote or local
-				// Actually BranchExists checks both.
-				// Let's try origin/main first
-				if remoteMain, _ := git.BranchExists(repoRoot, "origin/main"); remoteMain {
-					gitArgs = append(gitArgs, "-b", branch, "origin/main")
-				} else {
-					// Fallback to local main or HEAD
-					gitArgs = append(gitArgs, "-b", branch, "main")
-				}
+			// Check if remote branch exists
+			remoteBranch := "origin/" + branch
+			exists, _ := git.BranchExists(repoRoot, remoteBranch)
+
+			if exists {
+				gitArgs = append(gitArgs, remoteBranch, "-b", branch)
 			} else {
-				// Just use HEAD
-				gitArgs = append(gitArgs, "-b", branch)
+				// Check if origin/main exists
+				if valid, _ := git.BranchExists(repoRoot, "main"); valid {
+					// Check if it's remote or local
+					// Actually BranchExists checks both.
+					// Let's try origin/main first
+					if remoteMain, _ := git.BranchExists(repoRoot, "origin/main"); remoteMain {
+						gitArgs = append(gitArgs, "-b", branch, "origin/main")
+					} else {
+						// Fallback to local main or HEAD
+						gitArgs = append(gitArgs, "-b", branch, "main")
+					}
+				} else {
+					// Just use HEAD
+					gitArgs = append(gitArgs, "-b", branch)
+				}
 			}
 		}
 
