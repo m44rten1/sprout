@@ -1,0 +1,11 @@
+# Binaries
+sprout
+sprout_bin
+
+# Go build artifacts
+*.exe
+*.test
+*.prof
+
+# MacOS
+.DS_Store

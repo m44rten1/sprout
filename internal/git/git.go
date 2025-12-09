@@ -118,3 +118,11 @@ func BranchExists(repoRoot, branch string) (bool, error) {
 	}
 	return false, nil
 }
+
+// LocalBranchExists checks if a branch exists locally.
+func LocalBranchExists(repoRoot, branch string) (bool, error) {
+	if _, err := RunGitCommand(repoRoot, "rev-parse", "--verify", branch); err == nil {
+		return true, nil
+	}
+	return false, nil
+}
