@@ -48,6 +48,7 @@ brews:
     repository:
       owner: m44rten1
       name: homebrew-sprout
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
 
     commit_author:
       name: goreleaserbot
