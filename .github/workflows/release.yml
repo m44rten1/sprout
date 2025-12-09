@@ -27,4 +27,16 @@ jobs:
           version: latest
           args: release --clean
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          # Use GITHUB_TOKEN for creating the release in THIS repo
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Use GH_PAT for pushing to the Homebrew tap (cross-repo)
+          # GoReleaser will look for this env var if configured, or we can pass it explicitly.
+          # Actually, GoReleaser uses GITHUB_TOKEN by default for everything.
+          # To split permissions, we need to tell GoReleaser to use a different token for the tap.
+          # But simpler: just ensure GH_PAT has `repo` scope which includes access to THIS repo too.
+          # If GH_PAT is failing on "Resource not accessible by personal access token", it might be a Fine-grained PAT issue
+          # or the PAT doesn't have access to `sprout` repo.
+
+          # ALTERNATIVE: Use GITHUB_TOKEN for the release, and pass GH_PAT specifically for the tap.
+          # GoReleaser supports `HOMEBREW_TAP_GITHUB_TOKEN`.
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.GH_PAT }}
