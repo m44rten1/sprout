@@ -8,6 +8,15 @@ Stop `cd ../../other-repo`ing like a caveman.
 
 ## 🚀 Installation
 
+### Homebrew
+
+```bash
+brew tap m44rten1/sprout
+brew install sprout
+```
+
+### Go
+
 ```bash
 go install github.com/m44rten1/sprout@latest
 ```
