@@ -23,6 +23,12 @@ var openCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		sproutRoot, err := sprout.GetWorktreeRoot(repoRoot)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to determine sprout root: %v\n", err)
+			os.Exit(1)
+		}
+
 		var targetPath string
 
 		if len(args) == 0 {
@@ -33,18 +39,10 @@ var openCmd = &cobra.Command{
 				os.Exit(1)
 			}
 
-			// Filter out main worktree (usually the first one, or the one matching repoRoot)
-			// Actually, let's just show all of them, but maybe highlight the main one?
-			// Spec says: "excluding the main worktree".
-			var choices []git.Worktree
-			for _, wt := range worktrees {
-				if wt.Path != repoRoot {
-					choices = append(choices, wt)
-				}
-			}
+			choices := filterSproutWorktrees(worktrees, sproutRoot)
 
 			if len(choices) == 0 {
-				fmt.Println("No other worktrees found.")
+				fmt.Println("No sprout-managed worktrees found.")
 				return
 			}
 
