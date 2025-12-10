@@ -22,6 +22,12 @@ var removeCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		sproutRoot, err := sprout.GetWorktreeRoot(repoRoot)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to determine sprout root: %v\n", err)
+			os.Exit(1)
+		}
+
 		var targetPath string
 
 		if len(args) == 0 {
@@ -32,15 +38,10 @@ var removeCmd = &cobra.Command{
 				os.Exit(1)
 			}
 
-			var choices []git.Worktree
-			for _, wt := range worktrees {
-				if wt.Path != repoRoot {
-					choices = append(choices, wt)
-				}
-			}
+			choices := filterSproutWorktrees(worktrees, sproutRoot)
 
 			if len(choices) == 0 {
-				fmt.Println("No other worktrees found.")
+				fmt.Println("No sprout-managed worktrees found.")
 				return
 			}
 
@@ -77,6 +78,11 @@ var removeCmd = &cobra.Command{
 				}
 				targetPath = path
 			}
+		}
+
+		if !isUnderSproutRoot(targetPath, sproutRoot) {
+			fmt.Fprintf(os.Stderr, "Refusing to remove non-sprout worktree: %s\n", targetPath)
+			os.Exit(1)
 		}
 
 		// TODO: Add force flag support
