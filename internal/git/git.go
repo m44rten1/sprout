@@ -126,3 +126,82 @@ func LocalBranchExists(repoRoot, branch string) (bool, error) {
 	}
 	return false, nil
 }
+
+// Branch represents a git branch with metadata for display.
+type Branch struct {
+	// RefName is the full reference name (e.g., "feat/abc" or "origin/feat/abc")
+	RefName string
+	// DisplayName is the name to show in UI (remote branches without "origin/" prefix)
+	DisplayName string
+	// IsLocal indicates whether this is a local branch
+	IsLocal bool
+}
+
+// ListAllBranches returns all local and remote branches.
+// Remote branches have the "origin/" prefix stripped from their display name.
+// When a local branch exists, its remote equivalent is excluded from the results.
+func ListAllBranches(repoRoot string) ([]Branch, error) {
+	// Get all branches (local and remote)
+	out, err := RunGitCommand(repoRoot, "branch", "--all", "--format=%(refname:short)")
+	if err != nil {
+		return nil, err
+	}
+
+	lines := strings.Split(out, "\n")
+	var branches []Branch
+	localBranchNames := make(map[string]bool)
+
+	// First pass: collect all local branches
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		// Skip remote branches in first pass
+		if strings.HasPrefix(line, "remotes/origin/") || strings.HasPrefix(line, "origin/") {
+			continue
+		}
+		localBranchNames[line] = true
+		branches = append(branches, Branch{
+			RefName:     line,
+			DisplayName: line,
+			IsLocal:     true,
+		})
+	}
+
+	// Second pass: add remote branches that don't have local equivalents
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		// Process remote branches
+		var remoteBranch string
+		if strings.HasPrefix(line, "remotes/origin/") {
+			remoteBranch = strings.TrimPrefix(line, "remotes/origin/")
+		} else if strings.HasPrefix(line, "origin/") {
+			remoteBranch = strings.TrimPrefix(line, "origin/")
+		} else {
+			continue // Not a remote branch
+		}
+
+		// Skip HEAD pointer
+		if remoteBranch == "HEAD" {
+			continue
+		}
+
+		// Skip if local equivalent exists
+		if localBranchNames[remoteBranch] {
+			continue
+		}
+
+		branches = append(branches, Branch{
+			RefName:     "origin/" + remoteBranch,
+			DisplayName: remoteBranch,
+			IsLocal:     false,
+		})
+	}
+
+	return branches, nil
+}

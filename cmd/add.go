@@ -8,6 +8,7 @@ import (
 	"github.com/m44rten1/sprout/internal/editor"
 	"github.com/m44rten1/sprout/internal/git"
 	"github.com/m44rten1/sprout/internal/sprout"
+	"github.com/m44rten1/sprout/internal/tui"
 
 	"github.com/spf13/cobra"
 )
@@ -15,14 +16,42 @@ import (
 var addCmd = &cobra.Command{
 	Use:   "add [branch]",
 	Short: "Create a new worktree",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		branch := args[0]
+		var branch string
 
+		// Get repo root first for potential interactive mode
 		repoRoot, err := git.GetRepoRoot()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
+		}
+
+		// Interactive mode: select from existing branches
+		if len(args) == 0 {
+			branches, err := git.ListAllBranches(repoRoot)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to list branches: %v\n", err)
+				os.Exit(1)
+			}
+
+			if len(branches) == 0 {
+				fmt.Println("No branches found.")
+				return
+			}
+
+			idx, err := tui.SelectOne(branches, func(b git.Branch) string {
+				return b.DisplayName
+			}, nil)
+
+			if err != nil {
+				// User cancelled or error occurred
+				return
+			}
+
+			branch = branches[idx].DisplayName
+		} else {
+			branch = args[0]
 		}
 
 		worktreePath, err := sprout.GetWorktreePath(repoRoot, branch)
