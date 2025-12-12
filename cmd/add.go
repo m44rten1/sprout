@@ -15,7 +15,8 @@ import (
 )
 
 var (
-	initFlag bool
+	initFlag   bool
+	noOpenFlag bool
 )
 
 var addCmd = &cobra.Command{
@@ -132,6 +133,14 @@ var addCmd = &cobra.Command{
 
 		fmt.Println("Worktree created!")
 
+		// Open editor first if not disabled, then run hooks
+		// This allows user to start browsing code while hooks run
+		if !noOpenFlag && initFlag {
+			if err := editor.Open(worktreePath); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to open editor: %v\n", err)
+			}
+		}
+
 		// Run on_create hooks if --init flag is set
 		if initFlag {
 			if err := hooks.RunHooks(repoRoot, worktreePath, hooks.OnCreate); err != nil {
@@ -144,8 +153,11 @@ var addCmd = &cobra.Command{
 			}
 		}
 
-		if err := editor.Open(worktreePath); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to open editor: %v\n", err)
+		// Open editor after everything if not using --init or if --no-open wasn't set
+		if !initFlag && !noOpenFlag {
+			if err := editor.Open(worktreePath); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to open editor: %v\n", err)
+			}
 		}
 	},
 }
@@ -153,4 +165,5 @@ var addCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(addCmd)
 	addCmd.Flags().BoolVar(&initFlag, "init", false, "Run on_create hooks after creating the worktree")
+	addCmd.Flags().BoolVar(&noOpenFlag, "no-open", false, "Skip opening the worktree in an editor")
 }

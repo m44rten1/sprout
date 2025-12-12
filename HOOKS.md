@@ -142,6 +142,15 @@ Create a new worktree and run `on_create` hooks:
 sprout add feat/new-feature --init
 ```
 
+Your editor opens immediately, then hooks run in the terminal. This allows you to start browsing code while dependencies install and builds complete.
+
+**Skip opening the editor:**
+```bash
+sprout add feat/new-feature --init --no-open
+```
+
+Useful for automation or CI/CD scenarios where you only want the worktree created and initialized.
+
 ### `sprout init`
 
 Manually run `on_create` hooks in the current worktree:
@@ -162,6 +171,8 @@ Open a worktree and run `on_open` hooks:
 ```bash
 sprout open feat/bug-fix --sync
 ```
+
+Your editor opens immediately, then hooks run in the terminal. You can start working while type-checking and code generation complete in the background.
 
 ### `sprout sync`
 

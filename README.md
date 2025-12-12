@@ -35,7 +35,12 @@ This creates a fresh worktree for `feat/amazing-stuff` in `~/.sprout/...` and se
 ```bash
 sprout add feat/amazing-stuff --init
 ```
-Automatically run setup commands (defined in `.sprout.yml`) after creating the worktree.
+Automatically run setup commands (defined in `.sprout.yml`) after creating the worktree. Your editor opens immediately so you can start browsing code while hooks run in the terminal.
+
+```bash
+sprout add feat/amazing-stuff --init --no-open
+```
+Run bootstrap hooks without opening the editor (useful for automation).
 
 ### Open a worktree
 Jump back into the zone.
@@ -45,11 +50,11 @@ sprout open
 ```
 This pops up a fuzzy finder list of your active worktrees. Pick one, and boom, you're in your editor.
 
-**Sync before opening:**
+**Sync when opening:**
 ```bash
 sprout open --sync
 ```
-Run sync hooks (type-check, codegen, etc.) before opening the worktree.
+Open the worktree and run sync hooks (type-check, codegen, etc.) in the terminal.
 
 ### Remove a worktree
 Done with that PR? Nuke it.
@@ -130,10 +135,18 @@ Run `on_open` hooks to freshen up the current worktree before working.
 **Full bootstrap on new worktree:**
 ```bash
 sprout add feat/new-feature --init
-# Creates worktree + runs npm ci, npm run build
+# Editor opens immediately
+# Hooks run in terminal: npm ci, npm run build
+# You can browse code while dependencies install
 ```
 
-**Quick sync before working:**
+**Quick sync when opening:**
+```bash
+sprout open feat/bug-fix --sync
+# Editor opens, hooks run in terminal
+```
+
+**Manual sync in existing worktree:**
 ```bash
 cd ~/.sprout/my-project/feat/bug-fix
 sprout sync

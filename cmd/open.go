@@ -85,6 +85,13 @@ var openCmd = &cobra.Command{
 			}
 		}
 
+		// Open editor first, then run hooks
+		// This allows user to start browsing code while hooks run
+		if err := editor.Open(targetPath); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to open editor: %v\n", err)
+			os.Exit(1)
+		}
+
 		// Run on_open hooks if --sync flag is set
 		if syncFlag {
 			if err := hooks.RunHooks(repoRoot, targetPath, hooks.OnOpen); err != nil {
@@ -95,11 +102,6 @@ var openCmd = &cobra.Command{
 					os.Exit(1)
 				}
 			}
-		}
-
-		if err := editor.Open(targetPath); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to open editor: %v\n", err)
-			os.Exit(1)
 		}
 	},
 }
