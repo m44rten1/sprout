@@ -9,3 +9,4 @@ sprout_bin
 
 # MacOS
 .DS_Store
+.sprout.local.yml

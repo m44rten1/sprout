@@ -1,0 +1,6 @@
+hooks:
+  on_create:
+    - go mod download
+    - go build
+  on_open:
+    - go mod tidy

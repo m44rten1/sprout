@@ -7,10 +7,15 @@ import (
 
 	"github.com/m44rten1/sprout/internal/editor"
 	"github.com/m44rten1/sprout/internal/git"
+	"github.com/m44rten1/sprout/internal/hooks"
 	"github.com/m44rten1/sprout/internal/sprout"
 	"github.com/m44rten1/sprout/internal/tui"
 
 	"github.com/spf13/cobra"
+)
+
+var (
+	initFlag bool
 )
 
 var addCmd = &cobra.Command{
@@ -126,6 +131,19 @@ var addCmd = &cobra.Command{
 		}
 
 		fmt.Println("Worktree created!")
+
+		// Run on_create hooks if --init flag is set
+		if initFlag {
+			if err := hooks.RunHooks(repoRoot, worktreePath, hooks.OnCreate); err != nil {
+				if _, ok := err.(*hooks.UntrustedError); ok {
+					hooks.PrintUntrustedMessage(repoRoot)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error running hooks: %v\n", err)
+					os.Exit(1)
+				}
+			}
+		}
+
 		if err := editor.Open(worktreePath); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to open editor: %v\n", err)
 		}
@@ -134,4 +152,5 @@ var addCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(addCmd)
+	addCmd.Flags().BoolVar(&initFlag, "init", false, "Run on_create hooks after creating the worktree")
 }

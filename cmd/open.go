@@ -6,10 +6,15 @@ import (
 
 	"github.com/m44rten1/sprout/internal/editor"
 	"github.com/m44rten1/sprout/internal/git"
+	"github.com/m44rten1/sprout/internal/hooks"
 	"github.com/m44rten1/sprout/internal/sprout"
 	"github.com/m44rten1/sprout/internal/tui"
 
 	"github.com/spf13/cobra"
+)
+
+var (
+	syncFlag bool
 )
 
 var openCmd = &cobra.Command{
@@ -80,6 +85,18 @@ var openCmd = &cobra.Command{
 			}
 		}
 
+		// Run on_open hooks if --sync flag is set
+		if syncFlag {
+			if err := hooks.RunHooks(repoRoot, targetPath, hooks.OnOpen); err != nil {
+				if _, ok := err.(*hooks.UntrustedError); ok {
+					hooks.PrintUntrustedMessage(repoRoot)
+				} else {
+					fmt.Fprintf(os.Stderr, "Error running hooks: %v\n", err)
+					os.Exit(1)
+				}
+			}
+		}
+
 		if err := editor.Open(targetPath); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to open editor: %v\n", err)
 			os.Exit(1)
@@ -89,4 +106,5 @@ var openCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(openCmd)
+	openCmd.Flags().BoolVar(&syncFlag, "sync", false, "Run on_open hooks before opening the worktree")
 }

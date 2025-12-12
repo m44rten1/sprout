@@ -31,6 +31,12 @@ sprout add feat/amazing-stuff
 ```
 This creates a fresh worktree for `feat/amazing-stuff` in `~/.sprout/...` and sets it up for you. No more messing with `git worktree add ../../my-messy-folder/branch-name`.
 
+**Bootstrap your worktree:**
+```bash
+sprout add feat/amazing-stuff --init
+```
+Automatically run setup commands (defined in `.sprout.yml`) after creating the worktree.
+
 ### Open a worktree
 Jump back into the zone.
 
@@ -38,6 +44,12 @@ Jump back into the zone.
 sprout open
 ```
 This pops up a fuzzy finder list of your active worktrees. Pick one, and boom, you're in your editor.
+
+**Sync before opening:**
+```bash
+sprout open --sync
+```
+Run sync hooks (type-check, codegen, etc.) before opening the worktree.
 
 ### Remove a worktree
 Done with that PR? Nuke it.
@@ -59,6 +71,73 @@ Clean up the dead leaves.
 
 ```bash
 sprout prune
+```
+
+## 🪝 Project Hooks
+
+Sprout supports project-specific hooks that automate setup and sync tasks. Perfect for ensuring your worktrees are always ready to work with.
+
+📖 **[Read the full hooks documentation →](HOOKS.md)**
+
+### Configuration
+
+Create a `.sprout.yml` file in your repository root:
+
+```yaml
+hooks:
+  on_create:
+    - npm ci
+    - npm run build
+  on_open:
+    - npm run lint:types
+    - npm run generate
+```
+
+**Hook types:**
+- **on_create**: Runs when creating a new worktree (via `sprout add --init` or `sprout init`)
+- **on_open**: Runs when syncing a worktree (via `sprout open --sync` or `sprout sync`)
+
+### Security
+
+Hooks can execute arbitrary commands, so **you must explicitly trust each repository** before hooks will run.
+
+**Trust a repository:**
+```bash
+sprout trust
+```
+
+**View hook status:**
+```bash
+sprout hooks
+```
+
+### Hook Commands
+
+**Initialize/bootstrap a worktree:**
+```bash
+sprout init
+```
+Manually run `on_create` hooks in the current worktree. Useful for recovery or manual setup.
+
+**Sync a worktree:**
+```bash
+sprout sync
+```
+Run `on_open` hooks to freshen up the current worktree before working.
+
+### Example Workflows
+
+**Full bootstrap on new worktree:**
+```bash
+sprout add feat/new-feature --init
+# Creates worktree + runs npm ci, npm run build
+```
+
+**Quick sync before working:**
+```bash
+cd ~/.sprout/my-project/feat/bug-fix
+sprout sync
+# Runs type-check, codegen, etc.
 ```
 
 ## 🧠 Philosophy
