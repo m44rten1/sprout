@@ -31,10 +31,23 @@ var hooksCmd = &cobra.Command{
 		fmt.Printf("Repository: %s\n", repoRoot)
 		fmt.Println()
 
-		// Check if .sprout.yml exists
+		// Get main worktree path for config fallback
+		mainWorktreePath, err := git.GetMainWorktreePath()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to get main worktree path: %v\n", err)
+			os.Exit(1)
+		}
+
+		// Check if .sprout.yml exists in current or main worktree
 		configPath := filepath.Join(repoRoot, ".sprout.yml")
 		_, err = os.Stat(configPath)
 		configExists := err == nil
+
+		if !configExists && mainWorktreePath != repoRoot {
+			configPath = filepath.Join(mainWorktreePath, ".sprout.yml")
+			_, err = os.Stat(configPath)
+			configExists = err == nil
+		}
 
 		if !configExists {
 			fmt.Println("❌ No .sprout.yml found")
@@ -72,7 +85,7 @@ var hooksCmd = &cobra.Command{
 		fmt.Println()
 
 		// Load and display hooks
-		cfg, err := config.Load(repoRoot)
+		cfg, err := config.Load(repoRoot, mainWorktreePath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
 			os.Exit(1)

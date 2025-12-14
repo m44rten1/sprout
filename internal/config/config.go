@@ -19,17 +19,35 @@ type HooksConfig struct {
 	OnOpen   []string `yaml:"on_open"`
 }
 
-// Load loads the .sprout.yml configuration from the given repo root
-func Load(repoRoot string) (*Config, error) {
-	configPath := filepath.Join(repoRoot, ".sprout.yml")
-
+// Load loads the .sprout.yml configuration with fallback support.
+// It first checks currentPath for a worktree-specific config, then falls back
+// to mainWorktreePath for a shared config (useful for gitignored configs).
+// Returns an empty config if neither exists, or an error if parsing fails.
+func Load(currentPath, mainWorktreePath string) (*Config, error) {
+	// Try current path first (worktree-specific config)
+	configPath := filepath.Join(currentPath, ".sprout.yml")
 	data, err := os.ReadFile(configPath)
+
 	if err != nil {
 		if os.IsNotExist(err) {
-			// No config file is fine, return empty config
-			return &Config{}, nil
+			// Try main worktree path as fallback
+			if mainWorktreePath != "" && mainWorktreePath != currentPath {
+				configPath = filepath.Join(mainWorktreePath, ".sprout.yml")
+				data, err = os.ReadFile(configPath)
+				if err != nil {
+					if os.IsNotExist(err) {
+						// No config file in either location is fine, return empty config
+						return &Config{}, nil
+					}
+					return nil, fmt.Errorf("failed to read config file from main worktree: %w", err)
+				}
+			} else {
+				// No fallback available, return empty config
+				return &Config{}, nil
+			}
+		} else {
+			return nil, fmt.Errorf("failed to read config file: %w", err)
 		}
-		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
 	var cfg Config

@@ -34,8 +34,8 @@ Hooks can execute arbitrary commands on your system.`,
 				os.Exit(1)
 			}
 		} else {
-			// Trust current repo
-			repoRoot, err = git.GetRepoRoot()
+			// Trust current repo - use main worktree path for consistency
+			repoRoot, err = git.GetMainWorktreePath()
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)

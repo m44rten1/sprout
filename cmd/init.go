@@ -33,10 +33,17 @@ This is useful for:
 			os.Exit(1)
 		}
 
+		// Get main worktree path for config fallback
+		mainWorktreePath, err := git.GetMainWorktreePath()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to get main worktree path: %v\n", err)
+			os.Exit(1)
+		}
+
 		// Run on_create hooks
-		if err := hooks.RunHooks(repoRoot, worktreePath, hooks.OnCreate); err != nil {
+		if err := hooks.RunHooks(repoRoot, worktreePath, mainWorktreePath, hooks.OnCreate); err != nil {
 			if _, ok := err.(*hooks.UntrustedError); ok {
-				hooks.PrintUntrustedMessage(repoRoot)
+				hooks.PrintUntrustedMessage(mainWorktreePath)
 				os.Exit(1)
 			} else {
 				fmt.Fprintf(os.Stderr, "Error running hooks: %v\n", err)

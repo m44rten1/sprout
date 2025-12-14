@@ -19,19 +19,20 @@ const (
 )
 
 // RunHooks executes hooks for the given hook type
-func RunHooks(repoRoot, worktreePath string, hookType HookType) error {
-	// Check if repo is trusted
-	trusted, err := trust.IsRepoTrusted(repoRoot)
+func RunHooks(repoRoot, worktreePath, mainWorktreePath string, hookType HookType) error {
+	// Check if main worktree is trusted (not the current worktree)
+	// Trust is per-repository, not per-worktree
+	trusted, err := trust.IsRepoTrusted(mainWorktreePath)
 	if err != nil {
 		return fmt.Errorf("failed to check trust status: %w", err)
 	}
 
 	if !trusted {
-		return &UntrustedError{RepoRoot: repoRoot}
+		return &UntrustedError{RepoRoot: mainWorktreePath}
 	}
 
-	// Load config
-	cfg, err := config.Load(repoRoot)
+	// Load config with fallback from worktree to main worktree
+	cfg, err := config.Load(worktreePath, mainWorktreePath)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -138,8 +139,8 @@ func (e *HookExecutionError) Error() string {
 
 // CheckAndPrintUntrusted checks if repo has hooks but is not trusted, and prints message if so
 // Returns true if hooks exist but are untrusted (message was printed)
-func CheckAndPrintUntrusted(repoRoot string) (bool, error) {
-	cfg, err := config.Load(repoRoot)
+func CheckAndPrintUntrusted(repoRoot, mainWorktreePath string) (bool, error) {
+	cfg, err := config.Load(repoRoot, mainWorktreePath)
 	if err != nil {
 		// If config fails to load, don't treat it as untrusted error
 		return false, err

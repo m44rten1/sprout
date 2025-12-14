@@ -17,6 +17,22 @@ func GetRepoRoot() (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+// GetMainWorktreePath returns the absolute path to the main worktree.
+// This is useful for finding config files that might be gitignored but exist in the main worktree.
+func GetMainWorktreePath() (string, error) {
+	// The first worktree in the list is always the main worktree
+	worktrees, err := ListWorktrees("")
+	if err != nil {
+		return "", fmt.Errorf("failed to list worktrees: %w", err)
+	}
+
+	if len(worktrees) == 0 {
+		return "", fmt.Errorf("no worktrees found")
+	}
+
+	return worktrees[0].Path, nil
+}
+
 // WorktreeAdd creates a new worktree.
 func WorktreeAdd(repoRoot, path, branch, base string) error {
 	// Ensure parent directory exists

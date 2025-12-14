@@ -94,9 +94,15 @@ var openCmd = &cobra.Command{
 
 		// Run on_open hooks if --sync flag is set
 		if syncFlag {
-			if err := hooks.RunHooks(repoRoot, targetPath, hooks.OnOpen); err != nil {
+			mainWorktreePath, err := git.GetMainWorktreePath()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to get main worktree path: %v\n", err)
+				os.Exit(1)
+			}
+
+			if err := hooks.RunHooks(repoRoot, targetPath, mainWorktreePath, hooks.OnOpen); err != nil {
 				if _, ok := err.(*hooks.UntrustedError); ok {
-					hooks.PrintUntrustedMessage(repoRoot)
+					hooks.PrintUntrustedMessage(mainWorktreePath)
 				} else {
 					fmt.Fprintf(os.Stderr, "Error running hooks: %v\n", err)
 					os.Exit(1)
