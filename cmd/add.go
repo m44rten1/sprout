@@ -35,13 +35,36 @@ var addCmd = &cobra.Command{
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
+		// Get all branches
 		branches, err := git.ListAllBranches(repoRoot)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
+		// Get all worktrees to exclude branches that are already checked out
+		worktrees, err := git.ListWorktrees(repoRoot)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		// Build a set of branches that are already checked out
+		checkedOutBranches := make(map[string]bool)
+		for _, wt := range worktrees {
+			if wt.Branch != "" {
+				checkedOutBranches[wt.Branch] = true
+			}
+		}
+
 		var completions []string
 		for _, branch := range branches {
+			// Skip branches that are already checked out in any worktree
+			if checkedOutBranches[branch.DisplayName] {
+				continue
+			}
+			// Skip "origin" which is a remote name, not a branch
+			if branch.DisplayName == "origin" {
+				continue
+			}
 			completions = append(completions, branch.DisplayName)
 		}
 
