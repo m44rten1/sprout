@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/m44rten1/sprout/internal/git"
-	"github.com/m44rten1/sprout/internal/sprout"
 
 	"github.com/spf13/cobra"
 )
@@ -41,28 +40,26 @@ Clean worktrees show no indicators.`,
 			os.Exit(1)
 		}
 
-		// Use main worktree path for consistent sprout root calculation
-		mainRepoRoot, err := git.GetMainWorktreePath()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to get main worktree: %v\n", err)
-			os.Exit(1)
-		}
-
-		sproutRoot, err := sprout.GetWorktreeRoot(mainRepoRoot)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to determine sprout root: %v\n", err)
-			os.Exit(1)
-		}
-
 		worktrees, err := git.ListWorktrees(repoRoot)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to list worktrees: %v\n", err)
 			os.Exit(1)
 		}
 
-		worktrees = filterSproutWorktrees(worktrees, sproutRoot)
-		worktrees = filterExistingWorktrees(worktrees)
-		if len(worktrees) == 0 {
+		// Filter to only sprout-managed worktrees (check ALL possible sprout roots)
+		sproutRoots := getPossibleSproutRoots()
+		var sproutWorktrees []git.Worktree
+		for _, wt := range worktrees {
+			for _, sproutRoot := range sproutRoots {
+				if isUnderSproutRoot(wt.Path, sproutRoot) {
+					sproutWorktrees = append(sproutWorktrees, wt)
+					break
+				}
+			}
+		}
+
+		sproutWorktrees = filterExistingWorktrees(sproutWorktrees)
+		if len(sproutWorktrees) == 0 {
 			fmt.Println("No sprout-managed worktrees found.")
 			return
 		}
@@ -78,10 +75,10 @@ Clean worktrees show no indicators.`,
 		}
 
 		// Collect status in parallel
-		lines := make([]outputLine, len(worktrees))
+		lines := make([]outputLine, len(sproutWorktrees))
 		var wg sync.WaitGroup
 
-		for i, wt := range worktrees {
+		for i, wt := range sproutWorktrees {
 			wg.Add(1)
 			go func(idx int, worktree git.Worktree) {
 				defer wg.Done()
@@ -187,7 +184,6 @@ func listAllRepos() {
 		}
 	}
 
-	lines := make([]outputLine, 0, totalLines)
 	first := true
 
 	// Collect all worktrees with their indices for parallel processing
@@ -267,7 +263,7 @@ func listAllRepos() {
 	}
 
 	wg.Wait()
-	lines = results
+	lines := results
 
 	// Calculate the maximum label and status width (without ANSI codes) for alignment
 	maxLabelWidth := 0
@@ -363,9 +359,18 @@ func discoverAllSproutRepos() ([]RepoWorktrees, error) {
 			mainRepoRoot := worktrees[0].Path
 
 			// Filter to only sprout-managed worktrees (exclude main repo)
+			// Check against all possible sprout roots, not just the discovered directory
 			var sproutWorktrees []git.Worktree
+			sproutRoots := getPossibleSproutRoots()
 			for _, wt := range worktrees {
-				if isUnderSproutRoot(wt.Path, dir) {
+				isUnderAnySproutRoot := false
+				for _, sproutRoot := range sproutRoots {
+					if isUnderSproutRoot(wt.Path, sproutRoot) {
+						isUnderAnySproutRoot = true
+						break
+					}
+				}
+				if isUnderAnySproutRoot {
 					sproutWorktrees = append(sproutWorktrees, wt)
 				}
 			}

@@ -8,7 +8,6 @@ import (
 	"github.com/m44rten1/sprout/internal/editor"
 	"github.com/m44rten1/sprout/internal/git"
 	"github.com/m44rten1/sprout/internal/hooks"
-	"github.com/m44rten1/sprout/internal/sprout"
 	"github.com/m44rten1/sprout/internal/tui"
 
 	"github.com/spf13/cobra"
@@ -33,22 +32,22 @@ var openCmd = &cobra.Command{
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		mainRepoRoot, err := git.GetMainWorktreePath()
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-
-		sproutRoot, err := sprout.GetWorktreeRoot(mainRepoRoot)
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-
 		worktrees, err := git.ListWorktrees(repoRoot)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		choices := filterSproutWorktrees(worktrees, sproutRoot)
+		// Filter to sprout worktrees (check all possible sprout roots)
+		sproutRoots := getPossibleSproutRoots()
+		var choices []git.Worktree
+		for _, wt := range worktrees {
+			for _, sproutRoot := range sproutRoots {
+				if isUnderSproutRoot(wt.Path, sproutRoot) {
+					choices = append(choices, wt)
+					break
+				}
+			}
+		}
 
 		var completions []string
 		for _, wt := range choices {
@@ -66,19 +65,6 @@ var openCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// Use main worktree path for consistent sprout root calculation
-		mainRepoRoot, err := git.GetMainWorktreePath()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to get main worktree: %v\n", err)
-			os.Exit(1)
-		}
-
-		sproutRoot, err := sprout.GetWorktreeRoot(mainRepoRoot)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to determine sprout root: %v\n", err)
-			os.Exit(1)
-		}
-
 		var targetPath string
 
 		if len(args) == 0 {
@@ -89,7 +75,17 @@ var openCmd = &cobra.Command{
 				os.Exit(1)
 			}
 
-			choices := filterSproutWorktrees(worktrees, sproutRoot)
+			// Filter to sprout worktrees (check all possible sprout roots)
+			sproutRoots := getPossibleSproutRoots()
+			var choices []git.Worktree
+			for _, wt := range worktrees {
+				for _, sproutRoot := range sproutRoots {
+					if isUnderSproutRoot(wt.Path, sproutRoot) {
+						choices = append(choices, wt)
+						break
+					}
+				}
+			}
 
 			if len(choices) == 0 {
 				fmt.Println("No sprout-managed worktrees found.")
@@ -114,19 +110,37 @@ var openCmd = &cobra.Command{
 			arg := args[0]
 			// Check if it's a path
 			if info, err := os.Stat(arg); err == nil && info.IsDir() {
-			targetPath = arg
-		} else {
-			// Assume it's a branch
-			path, err := sprout.GetWorktreePath(mainRepoRoot, arg)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error calculating worktree path: %v\n", err)
-				os.Exit(1)
-			}
-				if _, err := os.Stat(path); err != nil {
-					fmt.Fprintf(os.Stderr, "No worktree found for branch '%s' at %s\n", arg, path)
+				targetPath = arg
+			} else {
+				// Assume it's a branch - search for it in worktrees
+				worktrees, err := git.ListWorktrees(repoRoot)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to list worktrees: %v\n", err)
 					os.Exit(1)
 				}
-				targetPath = path
+
+				// Filter to sprout worktrees and find matching branch
+				sproutRoots := getPossibleSproutRoots()
+				var found bool
+				for _, wt := range worktrees {
+					if wt.Branch == arg {
+						for _, sproutRoot := range sproutRoots {
+							if isUnderSproutRoot(wt.Path, sproutRoot) {
+								targetPath = wt.Path
+								found = true
+								break
+							}
+						}
+						if found {
+							break
+						}
+					}
+				}
+
+				if !found {
+					fmt.Fprintf(os.Stderr, "No sprout-managed worktree found for branch '%s'\n", arg)
+					os.Exit(1)
+				}
 			}
 		}
 
