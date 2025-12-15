@@ -1,5 +1,3 @@
-Here’s an updated spec.md you can drop in directly, with the ~/.sprout layout, repo slug + hash, and the final name sprout baked in.
-
 # sprout – Git worktree helper
 
 ## Overview
