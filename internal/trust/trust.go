@@ -20,18 +20,32 @@ type TrustedProject struct {
 	TrustedAt time.Time `json:"trusted_at"`
 }
 
-// GetStorePath returns the path to the trusted projects store
-func GetStorePath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("failed to get user home directory: %w", err)
+// GetConfigDir returns the sprout config directory, respecting XDG_CONFIG_HOME
+func GetConfigDir() (string, error) {
+	var configDir string
+	if xdgConfig := os.Getenv("XDG_CONFIG_HOME"); xdgConfig != "" {
+		configDir = filepath.Join(xdgConfig, "sprout")
+	} else {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("failed to get user home directory: %w", err)
+		}
+		configDir = filepath.Join(home, ".config", "sprout")
 	}
 
-	configDir := filepath.Join(home, ".config", "sprout")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create config directory: %w", err)
 	}
 
+	return configDir, nil
+}
+
+// GetStorePath returns the path to the trusted projects store
+func GetStorePath() (string, error) {
+	configDir, err := GetConfigDir()
+	if err != nil {
+		return "", err
+	}
 	return filepath.Join(configDir, "trusted-projects.json"), nil
 }
 
