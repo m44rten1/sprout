@@ -25,27 +25,20 @@ go install github.com/m44rten1/sprout@latest
 
 ### Shell Completion
 
-**Homebrew users**: Shell completion is automatically configured! Just restart your terminal.
-
-**Manual installation** or **other package managers**:
+Enable tab completion with one command:
 
 ```bash
-# For Zsh (add to ~/.zshrc)
-source <(sprout completion zsh)
-
-# For Bash (add to ~/.bashrc)
-source <(sprout completion bash)
-
-# For Fish
-sprout completion fish | source
+sprout install-completion
 ```
 
-📖 **[Full completion setup guide →](COMPLETION.md)**
+This automatically detects your shell (zsh/bash/fish) and configures completion. Restart your terminal and you're done!
 
 Once configured, you can tab-complete:
 - `sprout add <TAB>` - Shows all available branches
 - `sprout open <TAB>` - Shows branches with existing worktrees
 - `sprout remove <TAB>` - Shows branches with existing worktrees
+
+📖 **[Full completion setup guide →](COMPLETION.md)**
 
 ### Add a worktree
 Want to work on a new feature? Just sprout it.
