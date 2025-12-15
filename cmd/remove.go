@@ -26,7 +26,12 @@ var removeCmd = &cobra.Command{
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		sproutRoot, err := sprout.GetWorktreeRoot(repoRoot)
+		mainRepoRoot, err := git.GetMainWorktreePath()
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		sproutRoot, err := sprout.GetWorktreeRoot(mainRepoRoot)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -54,7 +59,14 @@ var removeCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		sproutRoot, err := sprout.GetWorktreeRoot(repoRoot)
+		// Use main worktree path for consistent sprout root calculation
+		mainRepoRoot, err := git.GetMainWorktreePath()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to get main worktree: %v\n", err)
+			os.Exit(1)
+		}
+
+		sproutRoot, err := sprout.GetWorktreeRoot(mainRepoRoot)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to determine sprout root: %v\n", err)
 			os.Exit(1)
@@ -94,14 +106,14 @@ var removeCmd = &cobra.Command{
 			arg := args[0]
 			// Check if it's a path
 			if info, err := os.Stat(arg); err == nil && info.IsDir() {
-				targetPath = arg
-			} else {
-				// Assume it's a branch
-				path, err := sprout.GetWorktreePath(repoRoot, arg)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Error calculating worktree path: %v\n", err)
-					os.Exit(1)
-				}
+			targetPath = arg
+		} else {
+			// Assume it's a branch
+			path, err := sprout.GetWorktreePath(mainRepoRoot, arg)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error calculating worktree path: %v\n", err)
+				os.Exit(1)
+			}
 				// We don't necessarily need to check if it exists on disk, git will complain if not.
 				// But let's check to be nice.
 				if _, err := os.Stat(path); err != nil {

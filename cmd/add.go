@@ -80,6 +80,13 @@ var addCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		// Use main worktree path for consistent sprout root calculation
+		mainRepoRoot, err := git.GetMainWorktreePath()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to get main worktree: %v\n", err)
+			os.Exit(1)
+		}
+
 		// Interactive mode: select from existing branches
 		if len(args) == 0 {
 			branches, err := git.ListAllBranches(repoRoot)
@@ -136,7 +143,7 @@ var addCmd = &cobra.Command{
 			branch = args[0]
 		}
 
-		worktreePath, err := sprout.GetWorktreePath(repoRoot, branch)
+		worktreePath, err := sprout.GetWorktreePath(mainRepoRoot, branch)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error calculating worktree path: %v\n", err)
 			os.Exit(1)

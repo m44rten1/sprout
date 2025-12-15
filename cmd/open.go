@@ -33,7 +33,12 @@ var openCmd = &cobra.Command{
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		sproutRoot, err := sprout.GetWorktreeRoot(repoRoot)
+		mainRepoRoot, err := git.GetMainWorktreePath()
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		sproutRoot, err := sprout.GetWorktreeRoot(mainRepoRoot)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -61,7 +66,14 @@ var openCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		sproutRoot, err := sprout.GetWorktreeRoot(repoRoot)
+		// Use main worktree path for consistent sprout root calculation
+		mainRepoRoot, err := git.GetMainWorktreePath()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to get main worktree: %v\n", err)
+			os.Exit(1)
+		}
+
+		sproutRoot, err := sprout.GetWorktreeRoot(mainRepoRoot)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to determine sprout root: %v\n", err)
 			os.Exit(1)
@@ -102,14 +114,14 @@ var openCmd = &cobra.Command{
 			arg := args[0]
 			// Check if it's a path
 			if info, err := os.Stat(arg); err == nil && info.IsDir() {
-				targetPath = arg
-			} else {
-				// Assume it's a branch
-				path, err := sprout.GetWorktreePath(repoRoot, arg)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Error calculating worktree path: %v\n", err)
-					os.Exit(1)
-				}
+			targetPath = arg
+		} else {
+			// Assume it's a branch
+			path, err := sprout.GetWorktreePath(mainRepoRoot, arg)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error calculating worktree path: %v\n", err)
+				os.Exit(1)
+			}
 				if _, err := os.Stat(path); err != nil {
 					fmt.Fprintf(os.Stderr, "No worktree found for branch '%s' at %s\n", arg, path)
 					os.Exit(1)

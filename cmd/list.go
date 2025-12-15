@@ -41,7 +41,14 @@ Clean worktrees show no indicators.`,
 			os.Exit(1)
 		}
 
-		sproutRoot, err := sprout.GetWorktreeRoot(repoRoot)
+		// Use main worktree path for consistent sprout root calculation
+		mainRepoRoot, err := git.GetMainWorktreePath()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to get main worktree: %v\n", err)
+			os.Exit(1)
+		}
+
+		sproutRoot, err := sprout.GetWorktreeRoot(mainRepoRoot)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to determine sprout root: %v\n", err)
 			os.Exit(1)
