@@ -221,3 +221,124 @@ func ListAllBranches(repoRoot string) ([]Branch, error) {
 
 	return branches, nil
 }
+
+// WorktreeStatus represents the git status of a worktree.
+type WorktreeStatus struct {
+	Dirty    bool
+	Ahead    int
+	Behind   int
+	Unmerged bool
+}
+
+// IsDirty checks if a worktree has uncommitted changes.
+func IsDirty(path string) (bool, error) {
+	out, err := RunGitCommand(path, "status", "--porcelain")
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(out) != "", nil
+}
+
+// GetAheadBehind returns how many commits the worktree is ahead/behind its upstream.
+// Returns (0, 0, nil) if there is no upstream tracking branch.
+func GetAheadBehind(path string) (ahead, behind int, err error) {
+	// Check if there's an upstream branch
+	_, err = RunGitCommand(path, "rev-parse", "--abbrev-ref", "@{upstream}")
+	if err != nil {
+		// No upstream tracking branch
+		return 0, 0, nil
+	}
+
+	// Get ahead/behind counts
+	out, err := RunGitCommand(path, "rev-list", "--left-right", "--count", "HEAD...@{upstream}")
+	if err != nil {
+		return 0, 0, nil // Silently skip on error
+	}
+
+	// Parse output: "ahead\tbehind"
+	parts := strings.Fields(out)
+	if len(parts) == 2 {
+		fmt.Sscanf(parts[0], "%d", &ahead)
+		fmt.Sscanf(parts[1], "%d", &behind)
+	}
+
+	return ahead, behind, nil
+}
+
+// GetDefaultBranch returns the default branch name for the repository (e.g., main, master).
+func GetDefaultBranch(path string) (string, error) {
+	// Try to get the default branch from origin/HEAD
+	out, err := RunGitCommand(path, "symbolic-ref", "refs/remotes/origin/HEAD")
+	if err == nil {
+		// Output is like "refs/remotes/origin/main"
+		branch := strings.TrimPrefix(out, "refs/remotes/origin/")
+		if branch != "" {
+			return branch, nil
+		}
+	}
+
+	// Fallback: check if main exists, then master
+	if _, err := RunGitCommand(path, "rev-parse", "--verify", "origin/main"); err == nil {
+		return "main", nil
+	}
+	if _, err := RunGitCommand(path, "rev-parse", "--verify", "origin/master"); err == nil {
+		return "master", nil
+	}
+
+	return "main", nil // Final fallback
+}
+
+// IsUnmerged checks if the worktree has commits not in the base branch.
+func IsUnmerged(path, baseBranch string) (bool, error) {
+	// Get current branch
+	currentBranch, err := RunGitCommand(path, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		return false, nil // Detached HEAD or error
+	}
+
+	// Skip if we're on the base branch
+	if currentBranch == baseBranch {
+		return false, nil
+	}
+
+	// Check if base branch exists
+	baseRef := "origin/" + baseBranch
+	if _, err := RunGitCommand(path, "rev-parse", "--verify", baseRef); err != nil {
+		// Base branch doesn't exist, can't determine
+		return false, nil
+	}
+
+	// Count commits in current branch not in base
+	out, err := RunGitCommand(path, "rev-list", "--count", baseRef+"..HEAD")
+	if err != nil {
+		return false, nil // Silently skip on error
+	}
+
+	count := 0
+	fmt.Sscanf(out, "%d", &count)
+	return count > 0, nil
+}
+
+// GetWorktreeStatus returns the complete status of a worktree.
+func GetWorktreeStatus(path string) WorktreeStatus {
+	status := WorktreeStatus{}
+
+	// Get dirty status
+	if dirty, err := IsDirty(path); err == nil {
+		status.Dirty = dirty
+	}
+
+	// Get ahead/behind status
+	if ahead, behind, err := GetAheadBehind(path); err == nil {
+		status.Ahead = ahead
+		status.Behind = behind
+	}
+
+	// Get unmerged status
+	baseBranch, _ := GetDefaultBranch(path)
+	if unmerged, err := IsUnmerged(path, baseBranch); err == nil {
+		status.Unmerged = unmerged
+	}
+
+	return status
+}

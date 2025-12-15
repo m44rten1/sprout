@@ -17,6 +17,16 @@ var listAllFlag bool
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List worktrees",
+	Long: `List worktrees for the current repository or all repositories.
+
+Status indicators show the git state of each worktree:
+  🔴  Dirty - worktree has uncommitted changes
+  ⬆️   Ahead - worktree has unpushed commits (ahead of remote)
+  ⬇️   Behind - worktree needs to pull (behind remote)
+  🔀  Unmerged - worktree has commits not in main/master branch
+
+Multiple indicators can appear together (e.g., 🔴🔀 means dirty and unmerged).
+Clean worktrees show no indicators.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if listAllFlag {
 			listAllRepos()
@@ -43,6 +53,7 @@ var listCmd = &cobra.Command{
 		}
 
 		worktrees = filterSproutWorktrees(worktrees, sproutRoot)
+		worktrees = filterExistingWorktrees(worktrees)
 		if len(worktrees) == 0 {
 			fmt.Println("No sprout-managed worktrees found.")
 			return
@@ -53,8 +64,9 @@ var listCmd = &cobra.Command{
 
 		// Collect output lines with styling
 		type outputLine struct {
-			label string
-			path  string
+			label  string
+			status string
+			path   string
 		}
 
 		var lines []outputLine
@@ -63,54 +75,48 @@ var listCmd = &cobra.Command{
 			if branch == "" {
 				branch = "(detached)"
 			}
+
+			// Get status indicators
+			wtStatus := git.GetWorktreeStatus(wt.Path)
+			statusEmojis := buildStatusEmojis(wtStatus)
+
 			lines = append(lines, outputLine{
-				label: "\033[32m" + branch + "\033[0m",
-				path:  "\033[90m" + wt.Path + "\033[0m",
+				label:  "\033[32m" + branch + "\033[0m",
+				status: statusEmojis,
+				path:   "\033[90m" + wt.Path + "\033[0m",
 			})
 		}
 
 		// Calculate the maximum label width (without ANSI codes) for alignment
-		maxWidth := 0
+		maxLabelWidth := 0
+		maxStatusWidth := 0
+		hasAnyStatus := false
 		for _, line := range lines {
-			width := 0
-			inAnsi := false
-			for _, r := range line.label {
-				if r == '\033' {
-					inAnsi = true
-				} else if inAnsi && r == 'm' {
-					inAnsi = false
-				} else if !inAnsi {
-					if r > 127 {
-						width += 2
-					} else {
-						width += 1
-					}
-				}
+			labelWidth := visualWidth(line.label)
+			if labelWidth > maxLabelWidth {
+				maxLabelWidth = labelWidth
 			}
-			if width > maxWidth {
-				maxWidth = width
+			statusWidth := visualWidth(line.status)
+			if statusWidth > maxStatusWidth {
+				maxStatusWidth = statusWidth
+			}
+			if line.status != "" {
+				hasAnyStatus = true
 			}
 		}
 
 		// Print with manual padding for consistent alignment
 		for _, line := range lines {
-			width := 0
-			inAnsi := false
-			for _, r := range line.label {
-				if r == '\033' {
-					inAnsi = true
-				} else if inAnsi && r == 'm' {
-					inAnsi = false
-				} else if !inAnsi {
-					if r > 127 {
-						width += 2
-					} else {
-						width += 1
-					}
-				}
+			labelWidth := visualWidth(line.label)
+			labelPadding := maxLabelWidth - labelWidth + 3
+
+			if hasAnyStatus {
+				statusWidth := visualWidth(line.status)
+				statusPadding := maxStatusWidth - statusWidth + 3
+				fmt.Printf("%s%*s%s%*s%s\n", line.label, labelPadding, "", line.status, statusPadding, "", line.path)
+			} else {
+				fmt.Printf("%s%*s%s\n", line.label, labelPadding, "", line.path)
 			}
-			padding := maxWidth - width + 3
-			fmt.Printf("%s%*s%s\n", line.label, padding, "", line.path)
 		}
 	},
 }
@@ -150,6 +156,7 @@ func listAllRepos() {
 	// Collect all output lines first to ensure proper alignment
 	type outputLine struct {
 		label            string
+		status           string
 		path             string
 		needsBlankBefore bool
 	}
@@ -165,6 +172,7 @@ func listAllRepos() {
 		repoName := filepath.Base(repo.RepoRoot)
 		lines = append(lines, outputLine{
 			label:            "📦 \033[1m" + repoName + "\033[0m",
+			status:           "",
 			path:             "\033[90m" + repo.RepoRoot + "\033[0m",
 			needsBlankBefore: !first,
 		})
@@ -175,35 +183,34 @@ func listAllRepos() {
 			if branch == "" {
 				branch = "(detached)"
 			}
+
+			// Get status indicators
+			wtStatus := git.GetWorktreeStatus(wt.Path)
+			statusEmojis := buildStatusEmojis(wtStatus)
+
 			lines = append(lines, outputLine{
-				label: "  \033[32m" + branch + "\033[0m",
-				path:  "\033[90m" + wt.Path + "\033[0m",
+				label:  "  \033[32m" + branch + "\033[0m",
+				status: statusEmojis,
+				path:   "\033[90m" + wt.Path + "\033[0m",
 			})
 		}
 	}
 
-	// Calculate the maximum label width (without ANSI codes) for alignment
-	maxWidth := 0
+	// Calculate the maximum label and status width (without ANSI codes) for alignment
+	maxLabelWidth := 0
+	maxStatusWidth := 0
+	hasAnyStatus := false
 	for _, line := range lines {
-		// Strip ANSI codes to get actual display width
-		// Simple approach: count visible characters (emojis count as 2, other chars as 1)
-		width := 0
-		inAnsi := false
-		for _, r := range line.label {
-			if r == '\033' {
-				inAnsi = true
-			} else if inAnsi && r == 'm' {
-				inAnsi = false
-			} else if !inAnsi {
-				if r > 127 {
-					width += 2 // Emoji/unicode
-				} else {
-					width += 1
-				}
-			}
+		labelWidth := visualWidth(line.label)
+		if labelWidth > maxLabelWidth {
+			maxLabelWidth = labelWidth
 		}
-		if width > maxWidth {
-			maxWidth = width
+		statusWidth := visualWidth(line.status)
+		if statusWidth > maxStatusWidth {
+			maxStatusWidth = statusWidth
+		}
+		if line.status != "" {
+			hasAnyStatus = true
 		}
 	}
 
@@ -213,95 +220,77 @@ func listAllRepos() {
 			fmt.Println()
 		}
 
-		// Calculate padding needed
-		width := 0
-		inAnsi := false
-		for _, r := range line.label {
-			if r == '\033' {
-				inAnsi = true
-			} else if inAnsi && r == 'm' {
-				inAnsi = false
-			} else if !inAnsi {
-				if r > 127 {
-					width += 2
-				} else {
-					width += 1
-				}
-			}
-		}
-		padding := maxWidth - width + 3 // 3 spaces gap
+		labelWidth := visualWidth(line.label)
+		labelPadding := maxLabelWidth - labelWidth + 3
 
-		fmt.Printf("%s%*s%s\n", line.label, padding, "", line.path)
+		if hasAnyStatus {
+			statusWidth := visualWidth(line.status)
+			statusPadding := maxStatusWidth - statusWidth + 3
+			fmt.Printf("%s%*s%s%*s%s\n", line.label, labelPadding, "", line.status, statusPadding, "", line.path)
+		} else {
+			fmt.Printf("%s%*s%s\n", line.label, labelPadding, "", line.path)
+		}
 	}
 }
 
-// discoverAllSproutRepos scans ~/.sprout and discovers all managed repositories
+// discoverAllSproutRepos scans all possible sprout directories and discovers all managed repositories
 func discoverAllSproutRepos() ([]RepoWorktrees, error) {
-	sproutRoot, err := sprout.GetSproutRoot()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get sprout root: %w", err)
-	}
-
-	// Check if sprout root exists
-	if _, err := os.Stat(sproutRoot); os.IsNotExist(err) {
-		return []RepoWorktrees{}, nil
-	}
-
-	// Read all repo directories
-	entries, err := os.ReadDir(sproutRoot)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read sprout root: %w", err)
-	}
-
 	var allRepos []RepoWorktrees
 	seenRepos := make(map[string]bool)
 
-	for _, entry := range entries {
-		if !entry.IsDir() {
+	// Get all possible sprout root directories
+	sproutRoots := getPossibleSproutRoots()
+
+	// Scan each sprout root directory
+	for _, sproutRoot := range sproutRoots {
+		// Check if sprout root exists
+		if _, err := os.Stat(sproutRoot); os.IsNotExist(err) {
 			continue
 		}
 
-		// Each directory should match pattern: <slug>-<8-char-hash>
-		repoDir := filepath.Join(sproutRoot, entry.Name())
-
-		// Find the main repo root by looking at any worktree in this directory
-		repoRoot, err := findRepoRootFromWorktrees(repoDir)
+		// Read all repo directories
+		entries, err := os.ReadDir(sproutRoot)
 		if err != nil {
-			// Skip directories that don't contain valid worktrees
+			// Skip directories we can't read
 			continue
 		}
 
-		// Skip if we've already processed this repo
-		if seenRepos[repoRoot] {
-			continue
-		}
-		seenRepos[repoRoot] = true
-
-		// List all worktrees for this repo
-		worktrees, err := git.ListWorktrees(repoRoot)
-		if err != nil {
-			// Skip repos that can't be listed
-			continue
-		}
-
-		// Filter to only sprout-managed worktrees
-		// We need to check all possible sprout roots since worktrees might have been created
-		// with different configurations (XDG_DATA_HOME vs ~/.sprout)
-		sproutRoots := getPossibleSproutRoots()
-
-		var filtered []git.Worktree
-		for _, wt := range worktrees {
-			if isSproutManagedWorktree(wt.Path, sproutRoots, repoRoot) {
-				filtered = append(filtered, wt)
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
 			}
-		}
-		worktrees = filtered
 
-		if len(worktrees) > 0 {
-			allRepos = append(allRepos, RepoWorktrees{
-				RepoRoot:  repoRoot,
-				Worktrees: worktrees,
-			})
+			// Each directory should match pattern: <slug>-<8-char-hash>
+			repoDir := filepath.Join(sproutRoot, entry.Name())
+
+			// Find all valid worktrees in this directory
+			worktreesInDir := findWorktreesInDirectory(repoDir)
+
+			// Group worktrees by their main repository
+			for _, wt := range worktreesInDir {
+				// Get the main repo root
+				repoRoot, err := getMainRepoRoot(wt.Path)
+				if err != nil {
+					continue
+				}
+
+				// Skip if we've already processed this repo, otherwise add the worktree
+				if !seenRepos[repoRoot] {
+					seenRepos[repoRoot] = true
+					allRepos = append(allRepos, RepoWorktrees{
+						RepoRoot:  repoRoot,
+						Worktrees: []git.Worktree{wt},
+					})
+				} else {
+					// Add to existing repo
+					for i := range allRepos {
+						if allRepos[i].RepoRoot == repoRoot {
+							allRepos[i].Worktrees = append(allRepos[i].Worktrees, wt)
+							break
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -344,43 +333,143 @@ func isSproutManagedWorktree(worktreePath string, sproutRoots []string, mainRepo
 	return false
 }
 
-// findRepoRootFromWorktrees finds the main repo root by examining worktrees in the given directory
-func findRepoRootFromWorktrees(repoDir string) (string, error) {
-	// Walk through the directory to find any .git file (worktree marker)
-	var gitFile string
-	err := filepath.Walk(repoDir, func(path string, info os.FileInfo, err error) error {
+// findWorktreesInDirectory finds all valid git worktrees in a directory
+func findWorktreesInDirectory(dir string) []git.Worktree {
+	var worktrees []git.Worktree
+
+	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return nil // Skip errors
+			return nil
 		}
+
+		// Look for .git files (worktree markers)
 		if !info.IsDir() && info.Name() == ".git" {
-			gitFile = path
-			return filepath.SkipAll // Found one, stop walking
+			worktreeDir := filepath.Dir(path)
+
+			// Try to get branch info from this worktree
+			branch, _ := git.RunGitCommand(worktreeDir, "rev-parse", "--abbrev-ref", "HEAD")
+			head, _ := git.RunGitCommand(worktreeDir, "rev-parse", "HEAD")
+
+			// Only add if we can successfully get git info
+			if head != "" {
+				wt := git.Worktree{
+					Path:   worktreeDir,
+					HEAD:   head,
+					Branch: branch,
+				}
+				worktrees = append(worktrees, wt)
+			}
 		}
 		return nil
 	})
 
-	if err != nil && err != filepath.SkipAll {
-		return "", err
-	}
+	return worktrees
+}
 
-	if gitFile == "" {
-		return "", fmt.Errorf("no worktrees found in %s", repoDir)
-	}
-
-	// Get the directory containing the .git file
-	worktreeDir := filepath.Dir(gitFile)
-
-	// Use git worktree list to find the main worktree (first in the list)
-	// This is more reliable than rev-parse --show-toplevel
-	worktrees, err := git.ListWorktrees(worktreeDir)
+// getMainRepoRoot gets the main repository root for a given worktree
+func getMainRepoRoot(worktreePath string) (string, error) {
+	// Get all worktrees from this worktree's perspective
+	worktrees, err := git.ListWorktrees(worktreePath)
 	if err != nil {
-		return "", fmt.Errorf("failed to list worktrees: %w", err)
+		return "", err
 	}
 
 	if len(worktrees) == 0 {
 		return "", fmt.Errorf("no worktrees found")
 	}
 
-	// The first worktree is always the main worktree
+	// First worktree is always the main repo
 	return worktrees[0].Path, nil
+}
+
+// findRepoRootFromWorktrees finds the main repo root by examining worktrees in the given directory
+func findRepoRootFromWorktrees(repoDir string) (string, error) {
+	// Walk through the directory to find any .git file (worktree marker)
+	var gitFiles []string
+	err := filepath.Walk(repoDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Skip errors
+		}
+		if !info.IsDir() && info.Name() == ".git" {
+			gitFiles = append(gitFiles, path)
+		}
+		return nil
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	if len(gitFiles) == 0 {
+		return "", fmt.Errorf("no worktrees found in %s", repoDir)
+	}
+
+	// Try each .git file until we find one that works
+	for _, gitFile := range gitFiles {
+		worktreeDir := filepath.Dir(gitFile)
+
+		// Use git worktree list to find the main worktree (first in the list)
+		// This is more reliable than rev-parse --show-toplevel
+		worktrees, err := git.ListWorktrees(worktreeDir)
+		if err != nil {
+			// This worktree might be broken, try the next one
+			continue
+		}
+
+		if len(worktrees) > 0 {
+			// The first worktree is always the main worktree
+			return worktrees[0].Path, nil
+		}
+	}
+
+	return "", fmt.Errorf("no valid worktrees found in %s", repoDir)
+}
+
+// filterExistingWorktrees filters out worktrees whose paths don't exist on the filesystem.
+func filterExistingWorktrees(worktrees []git.Worktree) []git.Worktree {
+	var existing []git.Worktree
+	for _, wt := range worktrees {
+		if _, err := os.Stat(wt.Path); err == nil {
+			existing = append(existing, wt)
+		}
+	}
+	return existing
+}
+
+// buildStatusEmojis builds a string of status emoji indicators.
+func buildStatusEmojis(status git.WorktreeStatus) string {
+	var emojis string
+	if status.Dirty {
+		emojis += "🔴"
+	}
+	if status.Ahead > 0 {
+		emojis += "⬆️"
+	}
+	if status.Behind > 0 {
+		emojis += "⬇️"
+	}
+	if status.Unmerged {
+		emojis += "🔀"
+	}
+	return emojis
+}
+
+// visualWidth calculates the display width of a string, accounting for ANSI codes and emojis.
+func visualWidth(s string) int {
+	width := 0
+	inAnsi := false
+	for _, r := range s {
+		if r == '\033' {
+			inAnsi = true
+		} else if inAnsi && r == 'm' {
+			inAnsi = false
+		} else if !inAnsi {
+			if r > 127 {
+				width += 2 // Emoji/unicode
+			} else {
+				width += 1
+			}
+		}
+	}
+	return width
 }

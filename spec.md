@@ -19,13 +19,16 @@ sprout's main goals:
 ## Worktree storage layout
 
 sprout never creates worktrees as siblings of the main repo.
-Instead, all worktrees live under a central root:
+Instead, all worktrees live under a central root directory.
 
-```text
-$HOME/.sprout/
-```
+**Supported locations (in order of preference):**
+- `$XDG_DATA_HOME/sprout` (if `$XDG_DATA_HOME` is set)
+- `$HOME/.local/share/sprout` (XDG-compliant default)
+- `$HOME/.sprout` (legacy location, still supported for backward compatibility)
 
-Within that, worktrees are grouped by repository identity:
+sprout will use the first available location when creating new worktrees. All locations are scanned when discovering existing worktrees (e.g., in `sprout list --all`).
+
+Within the sprout root, worktrees are grouped by repository identity:
 
 ```text
 $HOME/.sprout/<repo-slug>-<repo-id>/<branch-path>/<repo-slug>/
@@ -312,7 +315,7 @@ Remove an existing worktree.
 
 ### 4. sprout list [--all]
 
-List sprout-managed worktrees.
+List sprout-managed worktrees with git status indicators.
 
 **Modes:**
 
@@ -327,39 +330,55 @@ List sprout-managed worktrees.
 
 **Behavior:**
 
-- Wraps `git worktree list --porcelain` and filters to show only sprout-managed worktrees
+- Scans filesystem for sprout-managed worktrees in all sprout directories
 - Excludes the main worktree from output
-- Pretty-prints with color styling and aligned columns:
+- Displays git status indicators for each worktree:
+  - 🔴 Dirty - worktree has uncommitted changes (via `git status --porcelain`)
+  - ⬆️ Ahead - worktree has unpushed commits (via `git rev-list --count HEAD...@{upstream}`)
+  - ⬇️ Behind - worktree needs to pull (via `git rev-list --count HEAD...@{upstream}`)
+  - 🔀 Unmerged - worktree has commits not in main/master branch
+- Pretty-prints with color styling and aligned columns
 
 **Current repository output:**
 ```
-abc                                  /Users/you/.sprout/repo-a1b2c3d4/abc/repo
-feature/new-feature                  /Users/you/.sprout/repo-a1b2c3d4/feature/new-feature/repo
+abc                 🔴     /Users/you/.sprout/repo-a1b2c3d4/abc/repo
+feature/new-feature        /Users/you/.sprout/repo-a1b2c3d4/feature/new-feature/repo
 ```
 
 **All repositories output (`--all`):**
 ```
-📦 my-repo                           /Users/you/projects/my-repo
-  abc                                /Users/you/.sprout/my-repo-a1b2c3d4/abc/my-repo
-  feature/new-feature                /Users/you/.sprout/my-repo-a1b2c3d4/feature/new-feature/my-repo
+📦 my-repo                                    /Users/you/projects/my-repo
+  abc                                   🔴    /Users/you/.sprout/my-repo-a1b2c3d4/abc/my-repo
+  feature/new-feature                   🔀    /Users/you/.sprout/my-repo-a1b2c3d4/feature/new-feature/my-repo
 
-📦 another-repo                      /Users/you/projects/another-repo
-  main-dev                           /Users/you/.sprout/another-repo-e5f6g7h8/main-dev/another-repo
+📦 another-repo                               /Users/you/projects/another-repo
+  main-dev                              🔴⬆️  /Users/you/.sprout/another-repo-e5f6g7h8/main-dev/another-repo
 ```
 
 **Styling:**
 - Green text for branch names
+- Emoji status indicators in a separate aligned column
 - Dim gray text for paths
 - Bold repository names with 📦 emoji for `--all` mode
 - Globally aligned columns for easy scanning
+- Status column only appears if at least one worktree has status indicators
+
+**Status Indicator Logic:**
+- **Dirty**: Checked via `git status --porcelain` (non-empty output = dirty)
+- **Ahead/Behind**: Checked via `git rev-list --left-right --count HEAD...@{upstream}` (requires upstream tracking)
+- **Unmerged**: Checked via `git rev-list --count origin/main..HEAD` (or origin/master as fallback)
+- All git operations are non-fatal; errors are silently skipped to avoid breaking the list output
 
 **Flags:**
 - `--all`: List worktrees from all repositories
 
 **Notes:**
-- Only shows worktrees under sprout-managed directories (`~/.sprout`, `~/.local/share/sprout`)
+- Only shows worktrees that actually exist on the filesystem
+- Scans all possible sprout root locations (`~/.sprout`, `~/.local/share/sprout`, `$XDG_DATA_HOME/sprout`)
 - Main worktree is intentionally excluded from the list
-- `--all` mode checks multiple possible sprout root locations for compatibility
+- Handles stale git metadata gracefully by scanning filesystem directly
+- Multiple status indicators can appear together (e.g., 🔴🔀)
+- Clean worktrees show no indicators
 
 ⸻
 
@@ -452,6 +471,75 @@ Use --skip-hooks or --no-hooks flags to skip automatic execution.
 
 ⸻
 
+### 7. sprout repair [--prune]
+
+Repair git metadata for moved or relocated worktrees.
+
+**Usage:**
+
+```bash
+# Repair all repositories
+sprout repair
+
+# Repair and prune stale references
+sprout repair --prune
+```
+
+**Behavior:**
+
+1. Discovers all sprout-managed repositories by scanning sprout root directories
+2. For each repository, runs `git worktree repair` to fix metadata for moved worktrees
+3. Optionally runs `git worktree prune` to remove stale worktree references
+
+**When to use:**
+
+- After moving sprout directories (e.g., from `~/.sprout` to `~/.local/share/sprout`)
+- When `git worktree list` shows incorrect paths for existing worktrees
+- To clean up git metadata after manual worktree directory changes
+
+**Discovery:**
+
+The command scans all possible sprout root locations:
+- `$XDG_DATA_HOME/sprout` (if `$XDG_DATA_HOME` is set)
+- `~/.local/share/sprout`
+- `~/.sprout` (for backward compatibility)
+
+For each directory found, it walks the filesystem to discover valid git worktrees and groups them by their main repository.
+
+**Output:**
+
+```
+Found 3 repository(ies) to repair...
+
+📦 my-repo
+   ✅ Repaired worktree metadata
+   🧹 Pruned stale worktree references
+
+📦 another-repo
+   ✅ Repaired worktree metadata
+   🧹 Pruned stale worktree references
+
+Summary:
+  ✅ Repaired: 2
+  🧹 Pruned: 2
+```
+
+**Flags:**
+- `--prune` / `-p`: Also prune stale worktree references after repair
+
+**⚠️ Important:**
+
+Always run `sprout repair` WITHOUT `--prune` first when dealing with moved worktrees. The repair command updates git's metadata to reflect the current worktree locations. Only use `--prune` after verifying the repair worked correctly, as pruning will permanently remove metadata for worktrees that git cannot find.
+
+**Workflow for moved worktrees:**
+
+1. Move sprout directory (e.g., `mv ~/.sprout ~/.local/share/sprout`)
+2. Run `sprout repair` to update git metadata
+3. Verify with `sprout list --all`
+4. Optionally run `sprout repair --prune` to clean up truly deleted worktrees
+
+⸻
+
 ## Editor integration
 
 When opening a worktree (via `sprout open` or after `sprout add`), sprout attempts to open an editor in this order:
@@ -501,7 +589,8 @@ All editor spawning is non-blocking from the CLI perspective.
 - `sprout add` - Create worktrees (with optional hooks)
 - `sprout open` - Open worktrees (with optional hooks)
 - `sprout remove` - Remove worktrees (automatically prunes stale references)
-- `sprout list` - List sprout-managed worktrees
+- `sprout list` - List sprout-managed worktrees with git status indicators
+- `sprout repair` - Repair git metadata for moved worktrees
 - `sprout trust` - Trust repositories for hook execution
 - `sprout hooks` - Display hook configuration status
 - `sprout completion` - Generate shell completion scripts

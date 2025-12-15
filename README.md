@@ -2,7 +2,7 @@
 
 **Git worktrees for humans who hate clutter.**
 
-`sprout` is a tiny CLI tool that manages your Git worktrees so you don't have to. It keeps your project directories clean by tucking worktrees away in `~/.sprout`, and gives you a nice fuzzy-finder interface to jump between them.
+`sprout` is a tiny CLI tool that manages your Git worktrees so you don't have to. It keeps your project directories clean by tucking worktrees away in `~/.local/share/sprout` (or `~/.sprout`), and gives you a nice fuzzy-finder interface to jump between them.
 
 Stop `cd ../../other-repo`ing like a caveman.
 
@@ -46,7 +46,7 @@ Want to work on a new feature? Just sprout it.
 ```bash
 sprout add feat/amazing-stuff
 ```
-This creates a fresh worktree for `feat/amazing-stuff` in `~/.sprout/...` and sets it up for you. No more messing with `git worktree add ../../my-messy-folder/branch-name`.
+This creates a fresh worktree for `feat/amazing-stuff` in your sprout directory and sets it up for you. No more messing with `git worktree add ../../my-messy-folder/branch-name`.
 
 If you have a `.sprout.yml` file with `on_create` hooks, they'll run automatically after creating the worktree. Your editor opens immediately so you can start browsing code while hooks run in the terminal.
 
@@ -103,7 +103,30 @@ The `--all` flag shows worktrees from all your sprout-managed repositories, grou
 Output includes:
 - 📦 Repository names (bold) with full paths (dim)
 - Branch names (green) with worktree paths (dim)
+- **Git status indicators** showing the state of each worktree:
+  - 🔴 Dirty (uncommitted changes)
+  - ⬆️ Ahead (unpushed commits)
+  - ⬇️ Behind (needs pull)
+  - 🔀 Unmerged (commits not in main/master)
 - Globally aligned columns for easy scanning
+
+Clean worktrees show no indicators. Multiple indicators can appear together (e.g., 🔴🔀).
+
+### Repair worktrees
+Fix git metadata for moved worktrees.
+
+```bash
+sprout repair
+```
+
+If you've moved your sprout directory (e.g., from `~/.sprout` to `~/.local/share/sprout`), git's internal metadata may become stale. This command runs `git worktree repair` on all discovered repositories to fix the references.
+
+**Also prune stale references:**
+```bash
+sprout repair --prune
+```
+
+⚠️ **Note:** Always run `sprout repair` first without `--prune` to fix moved worktrees. Only use `--prune` after verifying the repair worked, as pruning will remove metadata for worktrees git can't find.
 
 Note: `sprout remove` automatically prunes stale worktree references after removal.
 
@@ -179,9 +202,11 @@ sprout open feat/bug-fix --no-hooks
 Your main repo folder should be for your main repo. Not a graveyard of 50 abandoned feature branches.
 `sprout` enforces a clean separation:
 - **Repo**: Just the bare essentials (or your main branch).
-- **Work**: Happens in `~/.sprout`.
+- **Work**: Happens in a dedicated sprout directory (`~/.local/share/sprout` or `~/.sprout`).
 
 It's like `virtualenv` but for your entire codebase.
+
+Sprout follows the XDG Base Directory specification, storing worktrees in `~/.local/share/sprout` by default, with fallback support for the legacy `~/.sprout` location.
 
 ## 🤝 Contributing
 
