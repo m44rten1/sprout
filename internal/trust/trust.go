@@ -22,12 +22,16 @@ type TrustedProject struct {
 
 // GetStorePath returns the path to the trusted projects store
 func GetStorePath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("failed to get user home directory: %w", err)
+	configHome := os.Getenv("XDG_CONFIG_HOME")
+	if configHome == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("failed to get user home directory: %w", err)
+		}
+		configHome = filepath.Join(home, ".config")
 	}
 
-	configDir := filepath.Join(home, ".config", "sprout")
+	configDir := filepath.Join(configHome, "sprout")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create config directory: %w", err)
 	}

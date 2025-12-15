@@ -109,7 +109,7 @@ sprout trust /path/to/repo
 
 ### Trust Storage
 
-Trusted repositories are stored in `~/.config/sprout/trusted-projects.json`:
+Trusted repositories are stored in `$XDG_CONFIG_HOME/sprout/trusted-projects.json` (defaults to `~/.config/sprout/trusted-projects.json`):
 
 ```json
 {

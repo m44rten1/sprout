@@ -350,7 +350,7 @@ sprout trust /path/to/repo
 1. If no path provided, uses the main worktree path of the current repository
 2. Validates the path is a Git repository
 3. Checks if already trusted
-4. Adds the repository root path to `~/.config/sprout/trusted-projects.json`
+4. Adds the repository root path to `$XDG_CONFIG_HOME/sprout/trusted-projects.json` (defaults to `~/.config/sprout/trusted-projects.json`)
 
 **Security Model:**
 
@@ -360,7 +360,7 @@ Hooks can execute arbitrary commands on your system. sprout requires explicit tr
 
 **Trust Storage:**
 
-Trusted repositories are stored in `~/.config/sprout/trusted-projects.json`:
+Trusted repositories are stored in `$XDG_CONFIG_HOME/sprout/trusted-projects.json` (defaults to `~/.config/sprout/trusted-projects.json`):
 
 ```json
 {
