@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 
 	"github.com/m44rten1/sprout/internal/git"
 	"github.com/m44rten1/sprout/internal/sprout"
@@ -69,23 +70,33 @@ Clean worktrees show no indicators.`,
 			path   string
 		}
 
-		var lines []outputLine
-		for _, wt := range worktrees {
-			branch := wt.Branch
-			if branch == "" {
-				branch = "(detached)"
-			}
+		// Collect status in parallel
+		lines := make([]outputLine, len(worktrees))
+		var wg sync.WaitGroup
 
-			// Get status indicators
-			wtStatus := git.GetWorktreeStatus(wt.Path)
-			statusEmojis := buildStatusEmojis(wtStatus)
+		for i, wt := range worktrees {
+			wg.Add(1)
+			go func(idx int, worktree git.Worktree) {
+				defer wg.Done()
 
-			lines = append(lines, outputLine{
-				label:  "\033[32m" + branch + "\033[0m",
-				status: statusEmojis,
-				path:   "\033[90m" + wt.Path + "\033[0m",
-			})
+				branch := worktree.Branch
+				if branch == "" {
+					branch = "(detached)"
+				}
+
+				// Get status indicators
+				wtStatus := git.GetWorktreeStatus(worktree.Path)
+				statusEmojis := buildStatusEmojis(wtStatus)
+
+				lines[idx] = outputLine{
+					label:  "\033[32m" + branch + "\033[0m",
+					status: statusEmojis,
+					path:   "\033[90m" + worktree.Path + "\033[0m",
+				}
+			}(i, wt)
 		}
+
+		wg.Wait()
 
 		// Calculate the maximum label width (without ANSI codes) for alignment
 		maxLabelWidth := 0
@@ -161,8 +172,29 @@ func listAllRepos() {
 		needsBlankBefore bool
 	}
 
-	var lines []outputLine
+	// Pre-calculate total lines needed
+	totalLines := 0
+	for _, repo := range allRepos {
+		if len(repo.Worktrees) > 0 {
+			totalLines += 1 + len(repo.Worktrees) // repo header + worktrees
+		}
+	}
+
+	lines := make([]outputLine, 0, totalLines)
 	first := true
+
+	// Collect all worktrees with their indices for parallel processing
+	type worktreeJob struct {
+		lineIdx      int
+		worktree     git.Worktree
+		isRepoHeader bool
+		repoName     string
+		repoRoot     string
+		needsBlank   bool
+	}
+
+	var jobs []worktreeJob
+	lineIdx := 0
 
 	for _, repo := range allRepos {
 		if len(repo.Worktrees) == 0 {
@@ -170,31 +202,65 @@ func listAllRepos() {
 		}
 
 		repoName := filepath.Base(repo.RepoRoot)
-		lines = append(lines, outputLine{
-			label:            "📦 \033[1m" + repoName + "\033[0m",
-			status:           "",
-			path:             "\033[90m" + repo.RepoRoot + "\033[0m",
-			needsBlankBefore: !first,
+
+		// Add repo header
+		jobs = append(jobs, worktreeJob{
+			lineIdx:      lineIdx,
+			isRepoHeader: true,
+			repoName:     repoName,
+			repoRoot:     repo.RepoRoot,
+			needsBlank:   !first,
 		})
+		lineIdx++
 		first = false
 
+		// Add worktree jobs
 		for _, wt := range repo.Worktrees {
-			branch := wt.Branch
-			if branch == "" {
-				branch = "(detached)"
-			}
-
-			// Get status indicators
-			wtStatus := git.GetWorktreeStatus(wt.Path)
-			statusEmojis := buildStatusEmojis(wtStatus)
-
-			lines = append(lines, outputLine{
-				label:  "  \033[32m" + branch + "\033[0m",
-				status: statusEmojis,
-				path:   "\033[90m" + wt.Path + "\033[0m",
+			jobs = append(jobs, worktreeJob{
+				lineIdx:  lineIdx,
+				worktree: wt,
 			})
+			lineIdx++
 		}
 	}
+
+	// Process worktrees in parallel
+	results := make([]outputLine, len(jobs))
+	var wg sync.WaitGroup
+
+	for _, job := range jobs {
+		wg.Add(1)
+		go func(j worktreeJob) {
+			defer wg.Done()
+
+			if j.isRepoHeader {
+				results[j.lineIdx] = outputLine{
+					label:            "📦 \033[1m" + j.repoName + "\033[0m",
+					status:           "",
+					path:             "\033[90m" + j.repoRoot + "\033[0m",
+					needsBlankBefore: j.needsBlank,
+				}
+			} else {
+				branch := j.worktree.Branch
+				if branch == "" {
+					branch = "(detached)"
+				}
+
+				// Get status indicators
+				wtStatus := git.GetWorktreeStatus(j.worktree.Path)
+				statusEmojis := buildStatusEmojis(wtStatus)
+
+				results[j.lineIdx] = outputLine{
+					label:  "  \033[32m" + branch + "\033[0m",
+					status: statusEmojis,
+					path:   "\033[90m" + j.worktree.Path + "\033[0m",
+				}
+			}
+		}(job)
+	}
+
+	wg.Wait()
+	lines = results
 
 	// Calculate the maximum label and status width (without ANSI codes) for alignment
 	maxLabelWidth := 0
@@ -235,13 +301,11 @@ func listAllRepos() {
 
 // discoverAllSproutRepos scans all possible sprout directories and discovers all managed repositories
 func discoverAllSproutRepos() ([]RepoWorktrees, error) {
-	var allRepos []RepoWorktrees
-	seenRepos := make(map[string]bool)
-
 	// Get all possible sprout root directories
 	sproutRoots := getPossibleSproutRoots()
 
-	// Scan each sprout root directory
+	// Collect all repo directories from all sprout roots
+	var repoDirs []string
 	for _, sproutRoot := range sproutRoots {
 		// Check if sprout root exists
 		if _, err := os.Stat(sproutRoot); os.IsNotExist(err) {
@@ -251,49 +315,72 @@ func discoverAllSproutRepos() ([]RepoWorktrees, error) {
 		// Read all repo directories
 		entries, err := os.ReadDir(sproutRoot)
 		if err != nil {
-			// Skip directories we can't read
 			continue
 		}
 
 		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-
-			// Each directory should match pattern: <slug>-<8-char-hash>
-			repoDir := filepath.Join(sproutRoot, entry.Name())
-
-			// Find all valid worktrees in this directory
-			worktreesInDir := findWorktreesInDirectory(repoDir)
-
-			// Group worktrees by their main repository
-			for _, wt := range worktreesInDir {
-				// Get the main repo root
-				repoRoot, err := getMainRepoRoot(wt.Path)
-				if err != nil {
-					continue
-				}
-
-				// Skip if we've already processed this repo, otherwise add the worktree
-				if !seenRepos[repoRoot] {
-					seenRepos[repoRoot] = true
-					allRepos = append(allRepos, RepoWorktrees{
-						RepoRoot:  repoRoot,
-						Worktrees: []git.Worktree{wt},
-					})
-				} else {
-					// Add to existing repo
-					for i := range allRepos {
-						if allRepos[i].RepoRoot == repoRoot {
-							allRepos[i].Worktrees = append(allRepos[i].Worktrees, wt)
-							break
-						}
-					}
-				}
+			if entry.IsDir() {
+				repoDirs = append(repoDirs, filepath.Join(sproutRoot, entry.Name()))
 			}
 		}
 	}
 
+	// Process repos in parallel
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	seenRepos := make(map[string]bool)
+	var allRepos []RepoWorktrees
+
+	for _, repoDir := range repoDirs {
+		wg.Add(1)
+		go func(dir string) {
+			defer wg.Done()
+
+			// Find any worktree in this repo dir (shallow scan)
+			anyWorktree := findFirstWorktree(dir)
+			if anyWorktree == "" {
+				return
+			}
+
+			// Get all worktrees for this repo with ONE git command
+			worktrees, err := git.ListWorktrees(anyWorktree)
+			if err != nil {
+				return
+			}
+
+			if len(worktrees) == 0 {
+				return
+			}
+
+			// First worktree is always the main repo
+			mainRepoRoot := worktrees[0].Path
+
+			// Filter to only sprout-managed worktrees (exclude main repo)
+			var sproutWorktrees []git.Worktree
+			for _, wt := range worktrees {
+				if isUnderSproutRoot(wt.Path, dir) {
+					sproutWorktrees = append(sproutWorktrees, wt)
+				}
+			}
+
+			if len(sproutWorktrees) == 0 {
+				return
+			}
+
+			// Add to results (thread-safe)
+			mu.Lock()
+			if !seenRepos[mainRepoRoot] {
+				seenRepos[mainRepoRoot] = true
+				allRepos = append(allRepos, RepoWorktrees{
+					RepoRoot:  mainRepoRoot,
+					Worktrees: sproutWorktrees,
+				})
+			}
+			mu.Unlock()
+		}(repoDir)
+	}
+
+	wg.Wait()
 	return allRepos, nil
 }
 
@@ -316,113 +403,82 @@ func getPossibleSproutRoots() []string {
 	return roots
 }
 
-// isSproutManagedWorktree checks if a worktree is managed by sprout
-func isSproutManagedWorktree(worktreePath string, sproutRoots []string, mainRepoRoot string) bool {
-	// Skip the main repository root
-	if worktreePath == mainRepoRoot {
-		return false
-	}
+// findFirstWorktree does a shallow scan to find any worktree in the repo directory.
+// Sprout structure can be:
+//   - <repo-dir>/<branch>/.git (flat, older structure)
+//   - <repo-dir>/<branch>/<repo-slug>/.git (nested, newer structure)
+//   - <repo-dir>/<branch>/<repo-slug>/<repo-slug>/.git (double-nested, migration artifact)
+//
+// We scan up to 3 levels deep and return the first WORKING worktree.
+func findFirstWorktree(repoDir string) string {
+	// Collect all .git files up to 3 levels deep
+	var candidates []string
 
-	// Check if the worktree is under any of the sprout roots
-	for _, root := range sproutRoots {
-		if isUnderSproutRoot(worktreePath, root) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// findWorktreesInDirectory finds all valid git worktrees in a directory
-func findWorktreesInDirectory(dir string) []git.Worktree {
-	var worktrees []git.Worktree
-
-	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-
-		// Look for .git files (worktree markers)
-		if !info.IsDir() && info.Name() == ".git" {
-			worktreeDir := filepath.Dir(path)
-
-			// Try to get branch info from this worktree
-			branch, _ := git.RunGitCommand(worktreeDir, "rev-parse", "--abbrev-ref", "HEAD")
-			head, _ := git.RunGitCommand(worktreeDir, "rev-parse", "HEAD")
-
-			// Only add if we can successfully get git info
-			if head != "" {
-				wt := git.Worktree{
-					Path:   worktreeDir,
-					HEAD:   head,
-					Branch: branch,
-				}
-				worktrees = append(worktrees, wt)
-			}
-		}
-		return nil
-	})
-
-	return worktrees
-}
-
-// getMainRepoRoot gets the main repository root for a given worktree
-func getMainRepoRoot(worktreePath string) (string, error) {
-	// Get all worktrees from this worktree's perspective
-	worktrees, err := git.ListWorktrees(worktreePath)
+	// Level 1: <repo-dir>/
+	level1Entries, err := os.ReadDir(repoDir)
 	if err != nil {
-		return "", err
+		return ""
 	}
 
-	if len(worktrees) == 0 {
-		return "", fmt.Errorf("no worktrees found")
-	}
-
-	// First worktree is always the main repo
-	return worktrees[0].Path, nil
-}
-
-// findRepoRootFromWorktrees finds the main repo root by examining worktrees in the given directory
-func findRepoRootFromWorktrees(repoDir string) (string, error) {
-	// Walk through the directory to find any .git file (worktree marker)
-	var gitFiles []string
-	err := filepath.Walk(repoDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil // Skip errors
-		}
-		if !info.IsDir() && info.Name() == ".git" {
-			gitFiles = append(gitFiles, path)
-		}
-		return nil
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	if len(gitFiles) == 0 {
-		return "", fmt.Errorf("no worktrees found in %s", repoDir)
-	}
-
-	// Try each .git file until we find one that works
-	for _, gitFile := range gitFiles {
-		worktreeDir := filepath.Dir(gitFile)
-
-		// Use git worktree list to find the main worktree (first in the list)
-		// This is more reliable than rev-parse --show-toplevel
-		worktrees, err := git.ListWorktrees(worktreeDir)
-		if err != nil {
-			// This worktree might be broken, try the next one
+	for _, entry1 := range level1Entries {
+		if !entry1.IsDir() {
 			continue
 		}
 
-		if len(worktrees) > 0 {
-			// The first worktree is always the main worktree
-			return worktrees[0].Path, nil
+		level1Path := filepath.Join(repoDir, entry1.Name())
+
+		// Check level 1
+		if _, err := os.Stat(filepath.Join(level1Path, ".git")); err == nil {
+			candidates = append(candidates, level1Path)
+		}
+
+		// Level 2: <repo-dir>/<branch>/
+		level2Entries, err := os.ReadDir(level1Path)
+		if err != nil {
+			continue
+		}
+
+		for _, entry2 := range level2Entries {
+			if !entry2.IsDir() {
+				continue
+			}
+
+			level2Path := filepath.Join(level1Path, entry2.Name())
+
+			// Check level 2
+			if _, err := os.Stat(filepath.Join(level2Path, ".git")); err == nil {
+				candidates = append(candidates, level2Path)
+			}
+
+			// Level 3: <repo-dir>/<branch>/<slug>/
+			level3Entries, err := os.ReadDir(level2Path)
+			if err != nil {
+				continue
+			}
+
+			for _, entry3 := range level3Entries {
+				if !entry3.IsDir() {
+					continue
+				}
+
+				level3Path := filepath.Join(level2Path, entry3.Name())
+
+				// Check level 3
+				if _, err := os.Stat(filepath.Join(level3Path, ".git")); err == nil {
+					candidates = append(candidates, level3Path)
+				}
+			}
 		}
 	}
 
-	return "", fmt.Errorf("no valid worktrees found in %s", repoDir)
+	// Try each candidate and return the first one where git worktree list works
+	for _, candidate := range candidates {
+		if _, err := git.ListWorktrees(candidate); err == nil {
+			return candidate
+		}
+	}
+
+	return ""
 }
 
 // filterExistingWorktrees filters out worktrees whose paths don't exist on the filesystem.
