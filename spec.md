@@ -112,12 +112,12 @@ git -C <repo-root> worktree add <worktree-path> origin/<branch> -b <branch>
 git -C <repo-root> worktree add <worktree-path> -b <branch> origin/main
 
 
-	5.	Run on_create hooks automatically if:
+	5.	Open the worktree in an editor (unless --no-open is set).
+
+	6.	Run on_create hooks automatically if:
 	•	.sprout.yml exists with on_create hooks
 	•	Repository is trusted
 	•	--skip-hooks flag not set
-
-	6.	Open the worktree in an editor (unless --no-open is set).
 
 Flags:
 	•	--skip-hooks: Skip running on_create hooks even if .sprout.yml exists
@@ -168,6 +168,8 @@ Behavior:
 	•	.sprout.yml exists with on_open hooks
 	•	Repository is trusted
 	•	--no-hooks flag not set
+
+Note: on_open hooks run after the editor is opened, allowing you to start browsing code while hooks execute in the terminal.
 
 Flags:
 	•	--no-hooks: Skip running on_open hooks even if .sprout.yml exists

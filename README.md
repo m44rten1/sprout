@@ -103,8 +103,8 @@ hooks:
 ```
 
 **Hook types:**
-- **on_create**: Runs automatically when creating a new worktree (via `sprout add` or manually via `sprout init`)
-- **on_open**: Runs when syncing a worktree (via `sprout open --sync` or `sprout sync`)
+- **on_create**: Runs automatically when creating a new worktree (via `sprout add`)
+- **on_open**: Runs automatically when opening a worktree (via `sprout open`)
 
 ### Security
 
@@ -119,20 +119,6 @@ sprout trust
 ```bash
 sprout hooks
 ```
-
-### Hook Commands
-
-**Initialize/bootstrap a worktree:**
-```bash
-sprout init
-```
-Manually run `on_create` hooks in the current worktree. Useful for recovery or manual setup.
-
-**Sync a worktree:**
-```bash
-sprout sync
-```
-Run `on_open` hooks to freshen up the current worktree before working.
 
 ### Example Workflows
 
@@ -150,7 +136,7 @@ sprout add feat/quick-fix --skip-hooks
 # Worktree created, no hooks run
 ```
 
-**Open worktree with automatic sync:**
+**Open worktree:**
 ```bash
 sprout open feat/bug-fix
 # Editor opens, on_open hooks run automatically in terminal
@@ -161,13 +147,6 @@ sprout open feat/bug-fix
 ```bash
 sprout open feat/bug-fix --no-hooks
 # Editor opens, no hooks run
-```
-
-**Manual sync in existing worktree:**
-```bash
-cd ~/.sprout/my-project/feat/bug-fix
-sprout sync
-# Runs type-check, codegen, etc.
 ```
 
 ## 🧠 Philosophy

@@ -31,7 +31,7 @@ hooks:
 sprout trust
 ```
 
-3. Use hooks with sprout commands:
+3. Create and open worktrees (hooks run automatically):
 
 ```bash
 # Create a new worktree (on_create hooks run automatically)
@@ -71,7 +71,6 @@ Runs automatically after creating a new worktree. Ideal for:
 
 **Triggered by:**
 - `sprout add <branch>` (automatic, unless `--skip-hooks` is used)
-- `sprout init` (manual execution)
 
 #### `on_open`
 
@@ -83,7 +82,6 @@ Runs automatically when opening a worktree. Ideal for:
 
 **Triggered by:**
 - `sprout open` (automatic, unless `--no-hooks` is used)
-- `sprout sync` (manual execution)
 
 ### Validation Rules
 
@@ -158,19 +156,6 @@ sprout add feat/new-feature --no-open
 
 Useful for automation or CI/CD scenarios where you only want the worktree created.
 
-### `sprout init`
-
-Manually run `on_create` hooks in the current worktree:
-
-```bash
-cd ~/.sprout/my-project/feat/bug-fix
-sprout init
-```
-
-Useful for:
-- Recovering from a failed initial bootstrap
-- Re-running setup after configuration changes
-
 ### `sprout open`
 
 Open a worktree. If `.sprout.yml` exists with `on_open` hooks, they run automatically:
@@ -187,20 +172,6 @@ sprout open feat/bug-fix --no-hooks
 ```
 
 Open the worktree without running hooks, even if `.sprout.yml` exists.
-
-### `sprout sync`
-
-Run `on_open` hooks in the current worktree:
-
-```bash
-cd ~/.sprout/my-project/feat/bug-fix
-sprout sync
-```
-
-Useful for:
-- Freshening up a worktree before working
-- Running type checks and code generation
-- Syncing after pulling changes
 
 ### `sprout trust`
 

@@ -114,17 +114,17 @@ var hooksCmd = &cobra.Command{
 			fmt.Println()
 		}
 
-		// Show how to run hooks
+		// Show how hooks are triggered
 		if isTrusted {
-			fmt.Println("Run hooks with:")
+			fmt.Println("Hooks run automatically when:")
 			if cfg.HasCreateHooks() {
-				fmt.Println("  - sprout add --init    (runs on_create)")
-				fmt.Println("  - sprout init          (runs on_create)")
+				fmt.Println("  - sprout add           (runs on_create)")
 			}
 			if cfg.HasOpenHooks() {
-				fmt.Println("  - sprout open --sync   (runs on_open)")
-				fmt.Println("  - sprout sync          (runs on_open)")
+				fmt.Println("  - sprout open          (runs on_open)")
 			}
+			fmt.Println()
+			fmt.Println("Use --skip-hooks or --no-hooks flags to skip automatic execution.")
 			fmt.Println()
 		}
 	},
