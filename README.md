@@ -88,9 +88,22 @@ Select the worktree you want to delete, and it's gone. Safe and sound.
 ### List worktrees
 See what you've got growing.
 
+**List worktrees for current repository:**
 ```bash
 sprout list
 ```
+
+**List worktrees from all repositories:**
+```bash
+sprout list --all
+```
+
+The `--all` flag shows worktrees from all your sprout-managed repositories, grouped by project. Perfect for getting a bird's-eye view of all your active work.
+
+Output includes:
+- 📦 Repository names (bold) with full paths (dim)
+- Branch names (green) with worktree paths (dim)
+- Globally aligned columns for easy scanning
 
 Note: `sprout remove` automatically prunes stale worktree references after removal.
 

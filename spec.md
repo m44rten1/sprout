@@ -310,24 +310,56 @@ Remove an existing worktree.
 
 ⸻
 
-### 4. sprout list
+### 4. sprout list [--all]
 
-List sprout-managed worktrees for the current repo.
+List sprout-managed worktrees.
+
+**Modes:**
+
+1. **Current Repository** (`sprout list`)
+   - Lists worktrees for the current repository only
+   - Must be run from within a git repository
+
+2. **All Repositories** (`sprout list --all`)
+   - Lists worktrees from all sprout-managed repositories
+   - Can be run from anywhere (doesn't require being in a git repo)
+   - Groups worktrees by repository
 
 **Behavior:**
 
 - Wraps `git worktree list --porcelain` and filters to show only sprout-managed worktrees
 - Excludes the main worktree from output
-- Pretty-prints in tabular format:
+- Pretty-prints with color styling and aligned columns:
 
+**Current repository output:**
 ```
-bugfix/handover-double-message   /Users/.../.sprout/vl-widgets-a1b2c3d4/bugfix/handover-double-message/vl-widgets
-feat/new-widget                  /Users/.../.sprout/vl-widgets-a1b2c3d4/feat/new-widget/vl-widgets
+abc                                  /Users/you/.sprout/repo-a1b2c3d4/abc/repo
+feature/new-feature                  /Users/you/.sprout/repo-a1b2c3d4/feature/new-feature/repo
 ```
+
+**All repositories output (`--all`):**
+```
+📦 my-repo                           /Users/you/projects/my-repo
+  abc                                /Users/you/.sprout/my-repo-a1b2c3d4/abc/my-repo
+  feature/new-feature                /Users/you/.sprout/my-repo-a1b2c3d4/feature/new-feature/my-repo
+
+📦 another-repo                      /Users/you/projects/another-repo
+  main-dev                           /Users/you/.sprout/another-repo-e5f6g7h8/main-dev/another-repo
+```
+
+**Styling:**
+- Green text for branch names
+- Dim gray text for paths
+- Bold repository names with 📦 emoji for `--all` mode
+- Globally aligned columns for easy scanning
+
+**Flags:**
+- `--all`: List worktrees from all repositories
 
 **Notes:**
-- Only shows worktrees under `~/.sprout` for the current repository
+- Only shows worktrees under sprout-managed directories (`~/.sprout`, `~/.local/share/sprout`)
 - Main worktree is intentionally excluded from the list
+- `--all` mode checks multiple possible sprout root locations for compatibility
 
 ⸻
 
@@ -486,7 +518,6 @@ All editor spawning is non-blocking from the CLI perspective.
 
 - No custom Git plumbing beyond calling `git worktree` and basic git commands
 - No inspection or manipulation of commits, diffs, or PRs
-- No global multi-repo dashboard (currently scoped to single repo at a time)
 - No complex configuration files beyond `.sprout.yml` for hooks
 
 ⸻
@@ -502,7 +533,6 @@ Potential enhancements not yet implemented:
   - Custom sprout root (override `~/.sprout`)
 
 **Features:**
-- Cross-repo overview: `sprout list --all` (scan `~/.sprout` and show everything)
 - PR integration (e.g. `sprout add --pr 123`)
 - A TUI mode that shows worktrees and their status using a single terminal UI
 - `.sprout.local.yml` for per-developer overrides (useful for local customizations)
