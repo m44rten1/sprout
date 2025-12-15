@@ -506,20 +506,28 @@ func filterExistingWorktrees(worktrees []git.Worktree) []git.Worktree {
 
 // buildStatusEmojis builds a string of status emoji indicators.
 func buildStatusEmojis(status git.WorktreeStatus) string {
-	var emojis string
+	var emojis []string
 	if status.Dirty {
-		emojis += "🔴"
+		emojis = append(emojis, "🔴")
 	}
 	if status.Ahead > 0 {
-		emojis += "⬆️"
+		emojis = append(emojis, "⬆️")
 	}
 	if status.Behind > 0 {
-		emojis += "⬇️"
+		emojis = append(emojis, "⬇️")
 	}
 	if status.Unmerged {
-		emojis += "🔀"
+		emojis = append(emojis, "🔀")
 	}
-	return emojis
+
+	result := ""
+	for i, emoji := range emojis {
+		if i > 0 {
+			result += " "
+		}
+		result += emoji
+	}
+	return result
 }
 
 // visualWidth calculates the display width of a string, accounting for ANSI codes and emojis.
