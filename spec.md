@@ -95,18 +95,33 @@ worktree-root  = $HOME/.sprout/<repo-slug>-<repo-id>
 worktree-path  = <worktree-root>/<branch>  # branch used as nested path
 
 
-	2.	If origin/<branch> exists (remote branch):
+	2.	Check for .sprout.yml with on_create hooks:
+	•	If hooks exist and --skip-hooks not set:
+		•	Verify repository is trusted
+		•	If not trusted, show helpful error message and exit
+	•	If hooks exist and --skip-hooks is set, skip hook execution
+
+	3.	If origin/<branch> exists (remote branch):
 
 git -C <repo-root> worktree add <worktree-path> origin/<branch> -b <branch>
 
 
-	3.	If it doesn’t exist:
+	4.	If it doesn't exist:
 	•	Create local branch from origin/main (or configurable default):
 
 git -C <repo-root> worktree add <worktree-path> -b <branch> origin/main
 
 
-	4.	Optionally open the worktree in an editor (see “Editor integration”).
+	5.	Run on_create hooks automatically if:
+	•	.sprout.yml exists with on_create hooks
+	•	Repository is trusted
+	•	--skip-hooks flag not set
+
+	6.	Open the worktree in an editor (unless --no-open is set).
+
+Flags:
+	•	--skip-hooks: Skip running on_create hooks even if .sprout.yml exists
+	•	--no-open: Skip opening the worktree in an editor
 
 Notes:
 	•	sprout must create parent directories: mkdir -p "$worktree-root/<parent-of-branch-path>".
@@ -138,7 +153,24 @@ feat/new-widget                 /Users/.../.sprout/vl-widgets-a1b2c3d4/feat/new-
 	•	If the argument is an existing directory, treat it as the worktree path and open it.
 	3.	Branch (sprout open <branch>)
 	•	Compute worktree-path = $HOME/.sprout/<repo-slug>-<repo-id>/<branch>.
-	•	Open it if it exists; otherwise, show a helpful error (“no worktree for this branch”).
+	•	Open it if it exists; otherwise, show a helpful error ("no worktree for this branch").
+
+Behavior:
+	1.	Check for .sprout.yml with on_open hooks:
+	•	If hooks exist and --no-hooks not set:
+		•	Verify repository is trusted
+		•	If not trusted, show helpful error message and exit
+	•	If hooks exist and --no-hooks is set, skip hook execution
+
+	2.	Open the worktree in an editor
+
+	3.	Run on_open hooks automatically if:
+	•	.sprout.yml exists with on_open hooks
+	•	Repository is trusted
+	•	--no-hooks flag not set
+
+Flags:
+	•	--no-hooks: Skip running on_open hooks even if .sprout.yml exists
 
 ⸻
 

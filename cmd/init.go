@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/m44rten1/sprout/internal/config"
 	"github.com/m44rten1/sprout/internal/git"
 	"github.com/m44rten1/sprout/internal/hooks"
 
@@ -40,10 +41,17 @@ This is useful for:
 			os.Exit(1)
 		}
 
+		// Load config to show what hooks would run if untrusted
+		cfg, err := config.Load(worktreePath, mainWorktreePath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
+			os.Exit(1)
+		}
+
 		// Run on_create hooks
 		if err := hooks.RunHooks(repoRoot, worktreePath, mainWorktreePath, hooks.OnCreate); err != nil {
 			if _, ok := err.(*hooks.UntrustedError); ok {
-				hooks.PrintUntrustedMessage(mainWorktreePath)
+				hooks.PrintUntrustedMessageWithConfig(mainWorktreePath, cfg)
 				os.Exit(1)
 			} else {
 				fmt.Fprintf(os.Stderr, "Error running hooks: %v\n", err)

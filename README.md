@@ -31,16 +31,18 @@ sprout add feat/amazing-stuff
 ```
 This creates a fresh worktree for `feat/amazing-stuff` in `~/.sprout/...` and sets it up for you. No more messing with `git worktree add ../../my-messy-folder/branch-name`.
 
-**Bootstrap your worktree:**
+If you have a `.sprout.yml` file with `on_create` hooks, they'll run automatically after creating the worktree. Your editor opens immediately so you can start browsing code while hooks run in the terminal.
+
+**Skip hooks:**
 ```bash
-sprout add feat/amazing-stuff --init
+sprout add feat/amazing-stuff --skip-hooks
 ```
-Automatically run setup commands (defined in `.sprout.yml`) after creating the worktree. Your editor opens immediately so you can start browsing code while hooks run in the terminal.
+Create the worktree without running hooks, even if `.sprout.yml` exists.
 
 ```bash
-sprout add feat/amazing-stuff --init --no-open
+sprout add feat/amazing-stuff --no-open
 ```
-Run bootstrap hooks without opening the editor (useful for automation).
+Create the worktree without opening the editor (useful for automation).
 
 ### Open a worktree
 Jump back into the zone.
@@ -50,11 +52,13 @@ sprout open
 ```
 This pops up a fuzzy finder list of your active worktrees. Pick one, and boom, you're in your editor.
 
-**Sync when opening:**
+If you have a `.sprout.yml` file with `on_open` hooks, they'll run automatically after opening. This keeps your worktree fresh with type-checks, codegen, etc.
+
+**Skip hooks when opening:**
 ```bash
-sprout open --sync
+sprout open --no-hooks
 ```
-Open the worktree and run sync hooks (type-check, codegen, etc.) in the terminal.
+Open the worktree without running hooks, even if `.sprout.yml` exists.
 
 ### Remove a worktree
 Done with that PR? Nuke it.
@@ -99,7 +103,7 @@ hooks:
 ```
 
 **Hook types:**
-- **on_create**: Runs when creating a new worktree (via `sprout add --init` or `sprout init`)
+- **on_create**: Runs automatically when creating a new worktree (via `sprout add` or manually via `sprout init`)
 - **on_open**: Runs when syncing a worktree (via `sprout open --sync` or `sprout sync`)
 
 ### Security
@@ -132,18 +136,31 @@ Run `on_open` hooks to freshen up the current worktree before working.
 
 ### Example Workflows
 
-**Full bootstrap on new worktree:**
+**Create new worktree with automatic bootstrap:**
 ```bash
-sprout add feat/new-feature --init
+sprout add feat/new-feature
 # Editor opens immediately
-# Hooks run in terminal: npm ci, npm run build
+# Hooks run automatically in terminal: npm ci, npm run build
 # You can browse code while dependencies install
 ```
 
-**Quick sync when opening:**
+**Create worktree without running hooks:**
 ```bash
-sprout open feat/bug-fix --sync
-# Editor opens, hooks run in terminal
+sprout add feat/quick-fix --skip-hooks
+# Worktree created, no hooks run
+```
+
+**Open worktree with automatic sync:**
+```bash
+sprout open feat/bug-fix
+# Editor opens, on_open hooks run automatically in terminal
+# Type-check, codegen, etc. run while you browse code
+```
+
+**Open worktree without running hooks:**
+```bash
+sprout open feat/bug-fix --no-hooks
+# Editor opens, no hooks run
 ```
 
 **Manual sync in existing worktree:**

@@ -113,16 +113,39 @@ func (e *UntrustedError) Error() string {
 
 // PrintUntrustedMessage prints a helpful message about trusting a repo
 func PrintUntrustedMessage(repoRoot string) {
+	PrintUntrustedMessageWithConfig(repoRoot, nil)
+}
+
+// PrintUntrustedMessageWithConfig prints a helpful message about trusting a repo, including hook details
+func PrintUntrustedMessageWithConfig(repoRoot string, cfg *config.Config) {
 	configPath := filepath.Join(repoRoot, ".sprout.yml")
 
 	fmt.Println()
-	fmt.Println("🔒 Found .sprout.yml for this repository, but hooks are not trusted yet.")
+	fmt.Println("🔒 Found .sprout.yml but this repository is not trusted yet.")
+	fmt.Println()
 	fmt.Printf("   Config: %s\n", configPath)
-	fmt.Printf("   Repo:   %s\n", repoRoot)
+
+	// Show which hooks are defined if config is provided
+	if cfg != nil {
+		fmt.Println()
+		if len(cfg.Hooks.OnCreate) > 0 {
+			fmt.Println("   Hooks defined:")
+			fmt.Printf("   • on_create: %s", cfg.Hooks.OnCreate[0])
+			for i := 1; i < len(cfg.Hooks.OnCreate); i++ {
+				fmt.Printf(", %s", cfg.Hooks.OnCreate[i])
+			}
+			fmt.Println()
+		}
+	}
+
 	fmt.Println()
-	fmt.Println("To enable and run hooks for this project, run:")
+	fmt.Println("   To enable automatic hook execution, trust this repository:")
 	fmt.Println()
-	fmt.Println("    sprout trust")
+	fmt.Println("       sprout trust")
+	fmt.Println()
+	fmt.Println("   Or, to create the worktree without running hooks:")
+	fmt.Println()
+	fmt.Println("       sprout add <branch> --skip-hooks")
 	fmt.Println()
 }
 
@@ -157,7 +180,7 @@ func CheckAndPrintUntrusted(repoRoot, mainWorktreePath string) (bool, error) {
 	}
 
 	if !trusted {
-		PrintUntrustedMessage(repoRoot)
+		PrintUntrustedMessageWithConfig(repoRoot, cfg)
 		return true, nil
 	}
 

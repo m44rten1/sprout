@@ -34,11 +34,11 @@ sprout trust
 3. Use hooks with sprout commands:
 
 ```bash
-# Create a new worktree and run bootstrap
-sprout add feat/new-feature --init
+# Create a new worktree (on_create hooks run automatically)
+sprout add feat/new-feature
 
-# Open a worktree and run sync hooks
-sprout open --sync
+# Open a worktree (on_open hooks run automatically)
+sprout open
 ```
 
 ## Configuration
@@ -63,27 +63,27 @@ hooks:
 
 #### `on_create`
 
-Runs after creating a new worktree. Ideal for:
+Runs automatically after creating a new worktree. Ideal for:
 - Installing dependencies (`npm ci`, `go mod download`)
 - Building the project (`npm run build`, `go build`)
 - Database migrations
 - Generating code or assets
 
 **Triggered by:**
-- `sprout add <branch> --init`
-- `sprout init`
+- `sprout add <branch>` (automatic, unless `--skip-hooks` is used)
+- `sprout init` (manual execution)
 
 #### `on_open`
 
-Runs when explicitly syncing a worktree. Ideal for:
+Runs automatically when opening a worktree. Ideal for:
 - Type checking (`npm run lint:types`, `go vet`)
 - Code generation (`npm run generate`, `go generate`)
 - Lightweight sync operations
 - Database migrations
 
 **Triggered by:**
-- `sprout open <branch> --sync`
-- `sprout sync`
+- `sprout open` (automatic, unless `--no-hooks` is used)
+- `sprout sync` (manual execution)
 
 ### Validation Rules
 
@@ -97,7 +97,7 @@ Runs when explicitly syncing a worktree. Ideal for:
 
 ### Why Trust is Required
 
-Hooks execute arbitrary shell commands on your system. To prevent malicious code execution, you must **explicitly trust** each repository before hooks will run.
+Hooks execute arbitrary shell commands on your system. Since hooks run automatically when creating worktrees, you must **explicitly trust** each repository before hooks will run. This prevents malicious code execution from untrusted sources.
 
 ### Trusting a Repository
 
@@ -134,22 +134,29 @@ Trusted repositories are stored in `~/.config/sprout/trusted-projects.json`:
 
 ## Commands
 
-### `sprout add --init`
+### `sprout add`
 
-Create a new worktree and run `on_create` hooks:
+Create a new worktree. If `.sprout.yml` exists with `on_create` hooks, they run automatically:
 
 ```bash
-sprout add feat/new-feature --init
+sprout add feat/new-feature
 ```
 
 Your editor opens immediately, then hooks run in the terminal. This allows you to start browsing code while dependencies install and builds complete.
 
-**Skip opening the editor:**
+**Skip running hooks:**
 ```bash
-sprout add feat/new-feature --init --no-open
+sprout add feat/new-feature --skip-hooks
 ```
 
-Useful for automation or CI/CD scenarios where you only want the worktree created and initialized.
+Create the worktree without running hooks, even if `.sprout.yml` exists.
+
+**Skip opening the editor:**
+```bash
+sprout add feat/new-feature --no-open
+```
+
+Useful for automation or CI/CD scenarios where you only want the worktree created.
 
 ### `sprout init`
 
@@ -164,15 +171,22 @@ Useful for:
 - Recovering from a failed initial bootstrap
 - Re-running setup after configuration changes
 
-### `sprout open --sync`
+### `sprout open`
 
-Open a worktree and run `on_open` hooks:
+Open a worktree. If `.sprout.yml` exists with `on_open` hooks, they run automatically:
 
 ```bash
-sprout open feat/bug-fix --sync
+sprout open feat/bug-fix
 ```
 
 Your editor opens immediately, then hooks run in the terminal. You can start working while type-checking and code generation complete in the background.
+
+**Skip running hooks:**
+```bash
+sprout open feat/bug-fix --no-hooks
+```
+
+Open the worktree without running hooks, even if `.sprout.yml` exists.
 
 ### `sprout sync`
 
@@ -294,17 +308,28 @@ hooks:
     - git fetch origin
 ```
 
+### Copying Environment Files
+
+```yaml
+hooks:
+  on_create:
+    - cp $SPROUT_REPO_ROOT/.env .env
+```
+
+This copies the `.env` file from your repository root to each new worktree. Useful when each worktree needs its own environment configuration.
+
 ## Troubleshooting
 
 ### Hooks Not Running
 
-**Issue:** Commands don't execute when using `--init` or `--sync`.
+**Issue:** Commands don't execute when creating worktrees.
 
 **Solutions:**
 1. Check if repository is trusted: `sprout hooks`
 2. Trust the repository: `sprout trust`
 3. Verify `.sprout.yml` exists in repo root
 4. Check YAML syntax is valid
+5. Ensure you're not using `--skip-hooks` flag
 
 ### Command Fails
 

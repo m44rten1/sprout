@@ -16,8 +16,8 @@ import (
 )
 
 var (
-	initFlag   bool
-	noOpenFlag bool
+	skipHooksFlag bool
+	noOpenFlag    bool
 )
 
 var addCmd = &cobra.Command{
@@ -77,15 +77,24 @@ var addCmd = &cobra.Command{
 			return
 		}
 
-		// If --init is specified, verify hooks exist and are trusted before creating the worktree
-		if initFlag {
-			mainWorktreePath, err := git.GetMainWorktreePath()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to get main worktree path: %v\n", err)
-				os.Exit(1)
-			}
+		// Get main worktree path for config loading
+		mainWorktreePath, err := git.GetMainWorktreePath()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to get main worktree path: %v\n", err)
+			os.Exit(1)
+		}
 
-			// Check if hooks exist but are untrusted
+		// Check if .sprout.yml exists and has on_create hooks
+		cfg, err := config.Load(repoRoot, mainWorktreePath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
+			os.Exit(1)
+		}
+
+		shouldRunHooks := cfg.HasCreateHooks() && !skipHooksFlag
+
+		// If hooks should run, verify repo is trusted before creating worktree
+		if shouldRunHooks {
 			untrusted, err := hooks.CheckAndPrintUntrusted(repoRoot, mainWorktreePath)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to check trust status: %v\n", err)
@@ -94,18 +103,6 @@ var addCmd = &cobra.Command{
 
 			if untrusted {
 				// Hooks exist but repo is not trusted - abort before creating worktree
-				os.Exit(1)
-			}
-
-			// If we reach here and --init was used, verify on_create hooks actually exist
-			cfg, err := config.Load(repoRoot, mainWorktreePath)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
-				os.Exit(1)
-			}
-
-			if !cfg.HasCreateHooks() {
-				fmt.Fprintf(os.Stderr, "Error: --init flag specified but no on_create hooks configured for this repository\n")
 				os.Exit(1)
 			}
 		}
@@ -167,22 +164,16 @@ var addCmd = &cobra.Command{
 
 		fmt.Println("Worktree created!")
 
-		// Open editor first if not disabled, then run hooks
-		// This allows user to start browsing code while hooks run
-		if !noOpenFlag && initFlag {
+		// Open editor first if not disabled and hooks will run
+		// This allows user to start browsing code while hooks run in terminal
+		if !noOpenFlag && shouldRunHooks {
 			if err := editor.Open(worktreePath); err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to open editor: %v\n", err)
 			}
 		}
 
-		// Run on_create hooks if --init flag is set
-		if initFlag {
-			mainWorktreePath, err := git.GetMainWorktreePath()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to get main worktree path: %v\n", err)
-				os.Exit(1)
-			}
-
+		// Run on_create hooks automatically if they exist and repo is trusted
+		if shouldRunHooks {
 			if err := hooks.RunHooks(repoRoot, worktreePath, mainWorktreePath, hooks.OnCreate); err != nil {
 				if _, ok := err.(*hooks.UntrustedError); ok {
 					hooks.PrintUntrustedMessage(mainWorktreePath)
@@ -193,8 +184,8 @@ var addCmd = &cobra.Command{
 			}
 		}
 
-		// Open editor after everything if not using --init or if --no-open wasn't set
-		if !initFlag && !noOpenFlag {
+		// Open editor after everything if hooks didn't run and --no-open wasn't set
+		if !shouldRunHooks && !noOpenFlag {
 			if err := editor.Open(worktreePath); err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to open editor: %v\n", err)
 			}
@@ -204,6 +195,6 @@ var addCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(addCmd)
-	addCmd.Flags().BoolVar(&initFlag, "init", false, "Run on_create hooks after creating the worktree")
+	addCmd.Flags().BoolVar(&skipHooksFlag, "skip-hooks", false, "Skip running on_create hooks even if .sprout.yml exists")
 	addCmd.Flags().BoolVar(&noOpenFlag, "no-open", false, "Skip opening the worktree in an editor")
 }

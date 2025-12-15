@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/m44rten1/sprout/internal/config"
 	"github.com/m44rten1/sprout/internal/editor"
 	"github.com/m44rten1/sprout/internal/git"
 	"github.com/m44rten1/sprout/internal/hooks"
@@ -14,7 +15,7 @@ import (
 )
 
 var (
-	syncFlag bool
+	noHooksFlag bool
 )
 
 var openCmd = &cobra.Command{
@@ -85,6 +86,36 @@ var openCmd = &cobra.Command{
 			}
 		}
 
+		// Get main worktree path for config loading
+		mainWorktreePath, err := git.GetMainWorktreePath()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to get main worktree path: %v\n", err)
+			os.Exit(1)
+		}
+
+		// Check if .sprout.yml exists and has on_open hooks
+		cfg, err := config.Load(repoRoot, mainWorktreePath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
+			os.Exit(1)
+		}
+
+		shouldRunHooks := cfg.HasOpenHooks() && !noHooksFlag
+
+		// If hooks should run, verify repo is trusted before opening
+		if shouldRunHooks {
+			untrusted, err := hooks.CheckAndPrintUntrusted(repoRoot, mainWorktreePath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to check trust status: %v\n", err)
+				os.Exit(1)
+			}
+
+			if untrusted {
+				// Hooks exist but repo is not trusted - abort
+				os.Exit(1)
+			}
+		}
+
 		// Open editor first, then run hooks
 		// This allows user to start browsing code while hooks run
 		if err := editor.Open(targetPath); err != nil {
@@ -92,14 +123,8 @@ var openCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// Run on_open hooks if --sync flag is set
-		if syncFlag {
-			mainWorktreePath, err := git.GetMainWorktreePath()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to get main worktree path: %v\n", err)
-				os.Exit(1)
-			}
-
+		// Run on_open hooks automatically if they exist and repo is trusted
+		if shouldRunHooks {
 			if err := hooks.RunHooks(repoRoot, targetPath, mainWorktreePath, hooks.OnOpen); err != nil {
 				if _, ok := err.(*hooks.UntrustedError); ok {
 					hooks.PrintUntrustedMessage(mainWorktreePath)
@@ -114,5 +139,5 @@ var openCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(openCmd)
-	openCmd.Flags().BoolVar(&syncFlag, "sync", false, "Run on_open hooks before opening the worktree")
+	openCmd.Flags().BoolVar(&noHooksFlag, "no-hooks", false, "Skip running on_open hooks even if .sprout.yml exists")
 }

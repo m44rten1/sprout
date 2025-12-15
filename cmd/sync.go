@@ -41,6 +41,18 @@ This is useful for:
 			os.Exit(1)
 		}
 
+		// Load config to check hooks and show them if untrusted
+		cfg, err := config.Load(worktreePath, mainWorktreePath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
+			os.Exit(1)
+		}
+
+		if !cfg.HasOpenHooks() {
+			fmt.Fprintf(os.Stderr, "Error: no on_open hooks configured for this repository\n")
+			os.Exit(1)
+		}
+
 		// Check if hooks exist but are untrusted
 		untrusted, err := hooks.CheckAndPrintUntrusted(repoRoot, mainWorktreePath)
 		if err != nil {
@@ -53,22 +65,10 @@ This is useful for:
 			os.Exit(1)
 		}
 
-		// Verify on_open hooks actually exist
-		cfg, err := config.Load(repoRoot, mainWorktreePath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
-			os.Exit(1)
-		}
-
-		if !cfg.HasOpenHooks() {
-			fmt.Fprintf(os.Stderr, "Error: no on_open hooks configured for this repository\n")
-			os.Exit(1)
-		}
-
 		// Run on_open hooks
 		if err := hooks.RunHooks(repoRoot, worktreePath, mainWorktreePath, hooks.OnOpen); err != nil {
 			if _, ok := err.(*hooks.UntrustedError); ok {
-				hooks.PrintUntrustedMessage(mainWorktreePath)
+				hooks.PrintUntrustedMessageWithConfig(mainWorktreePath, cfg)
 				os.Exit(1)
 			} else {
 				fmt.Fprintf(os.Stderr, "Error running hooks: %v\n", err)
