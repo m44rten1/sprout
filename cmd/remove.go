@@ -93,6 +93,11 @@ var removeCmd = &cobra.Command{
 			os.Exit(1)
 		}
 		fmt.Printf("Removed worktree at %s\n", targetPath)
+
+		// Prune stale worktree references
+		if err := git.PruneWorktrees(repoRoot); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Failed to prune stale worktrees: %v\n", err)
+		}
 	},
 }
 

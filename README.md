@@ -75,12 +75,7 @@ See what you've got growing.
 sprout list
 ```
 
-### Prune
-Clean up the dead leaves.
-
-```bash
-sprout prune
-```
+Note: `sprout remove` automatically prunes stale worktree references after removal.
 
 ## 🪝 Project Hooks
 

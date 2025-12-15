@@ -58,8 +58,4 @@ if [ -d "$WORKTREE_PATH" ]; then
     exit 1
 fi
 
-# Test prune
-echo "Testing prune..."
-$SPROUT_BIN prune
-
 echo "All tests passed!"

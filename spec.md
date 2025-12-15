@@ -217,18 +217,6 @@ feat/...    /Users/.../.sprout/vl-widgets-a1b2c3d4/feat/new-widget
 
 ⸻
 
-5. sprout prune
-
-Clean up stale worktree references.
-	•	Runs:
-
-git -C <repo-root> worktree prune
-
-
-	•	Optionally, sprout can later add logic to detect and suggest removing orphaned directories under ~/.sprout/<repo-slug>-<repo-id> that are no longer tracked by Git.
-
-⸻
-
 Editor integration
 
 When opening a worktree (via sprout open or optionally after sprout add), sprout should attempt, in order:
@@ -262,9 +250,8 @@ CLI structure:
 	•	Commands:
 	•	sprout add
 	•	sprout open
-	•	sprout remove
+	•	sprout remove (automatically prunes stale references)
 	•	sprout list
-	•	sprout prune
 
 Aim for small, composable subcommand handlers that are easy to test.
 
