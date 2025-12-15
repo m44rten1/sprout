@@ -62,3 +62,4 @@ brews:
     # Your custom install instruction
     install: |
       bin.install "sprout"
+      generate_completions_from_executable(bin/"sprout", "completion")

@@ -2,7 +2,18 @@
 
 Shell completion for `sprout` provides tab-completion when using `add`, `open`, and `remove` commands.
 
-## Setup Instructions
+## Homebrew Installation
+
+**If you installed via Homebrew, completion is automatically configured!** Just restart your terminal and tab completion will work.
+
+Homebrew installs completion files to:
+- Zsh: `$(brew --prefix)/share/zsh/site-functions/_sprout`
+- Bash: `$(brew --prefix)/etc/bash_completion.d/sprout`
+- Fish: `$(brew --prefix)/share/fish/vendor_completions.d/sprout.fish`
+
+## Manual Setup Instructions
+
+If you installed via `go install` or another method:
 
 ### Zsh (macOS)
 

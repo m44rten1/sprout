@@ -25,7 +25,9 @@ go install github.com/m44rten1/sprout@latest
 
 ### Shell Completion
 
-Enable tab completion for branch names:
+**Homebrew users**: Shell completion is automatically configured! Just restart your terminal.
+
+**Manual installation** or **other package managers**:
 
 ```bash
 # For Zsh (add to ~/.zshrc)
@@ -40,7 +42,7 @@ sprout completion fish | source
 
 📖 **[Full completion setup guide →](COMPLETION.md)**
 
-Once configured, you can tab-complete branch names:
+Once configured, you can tab-complete:
 - `sprout add <TAB>` - Shows all available branches
 - `sprout open <TAB>` - Shows branches with existing worktrees
 - `sprout remove <TAB>` - Shows branches with existing worktrees
