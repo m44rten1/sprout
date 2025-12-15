@@ -38,10 +38,13 @@ func GetWorktreeRoot(repoPath string) (string, error) {
 }
 
 // GetWorktreePath returns the full path for a worktree given the repo path and branch name.
+// This now includes nesting the worktree inside a folder named after the repo.
+// Format: ~/.sprout/<repo-slug>-<repo-id>/<branch>/<repo-slug>/
 func GetWorktreePath(repoPath, branch string) (string, error) {
 	root, err := GetWorktreeRoot(repoPath)
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(root, branch), nil
+	repoSlug := filepath.Base(repoPath)
+	return filepath.Join(root, branch, repoSlug), nil
 }
