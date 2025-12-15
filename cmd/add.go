@@ -88,12 +88,41 @@ var addCmd = &cobra.Command{
 				os.Exit(1)
 			}
 
-			if len(branches) == 0 {
-				fmt.Println("No branches found.")
+			// Get all worktrees to exclude branches that are already checked out
+			worktrees, err := git.ListWorktrees(repoRoot)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to list worktrees: %v\n", err)
+				os.Exit(1)
+			}
+
+			// Build a set of branches that are already checked out
+			checkedOutBranches := make(map[string]bool)
+			for _, wt := range worktrees {
+				if wt.Branch != "" {
+					checkedOutBranches[wt.Branch] = true
+				}
+			}
+
+			// Filter branches
+			var filteredBranches []git.Branch
+			for _, branch := range branches {
+				// Skip branches that are already checked out in any worktree
+				if checkedOutBranches[branch.DisplayName] {
+					continue
+				}
+				// Skip "origin" which is a remote name, not a branch
+				if branch.DisplayName == "origin" {
+					continue
+				}
+				filteredBranches = append(filteredBranches, branch)
+			}
+
+			if len(filteredBranches) == 0 {
+				fmt.Println("No available branches found.")
 				return
 			}
 
-			idx, err := tui.SelectOne(branches, func(b git.Branch) string {
+			idx, err := tui.SelectOne(filteredBranches, func(b git.Branch) string {
 				return b.DisplayName
 			}, nil)
 
@@ -102,7 +131,7 @@ var addCmd = &cobra.Command{
 				return
 			}
 
-			branch = branches[idx].DisplayName
+			branch = filteredBranches[idx].DisplayName
 		} else {
 			branch = args[0]
 		}
