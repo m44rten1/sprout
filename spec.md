@@ -4,14 +4,15 @@
 
 **sprout** is a lightweight Go CLI tool for managing Git worktrees.
 
-It provides an ergonomic interface for creating, opening, listing, and removing worktrees, with interactive selection via `fzf` and smart handling of remote branches.
+It provides an ergonomic interface for creating, opening, listing, and removing worktrees, with interactive selection and smart handling of remote branches.
 
-sprout’s main goals:
+sprout's main goals:
 
 - Make Git worktrees trivial to use in day-to-day development.
 - Keep project directories clean by storing worktrees under `~/.sprout`.
 - Offer a small, predictable command surface (`sprout add`, `sprout open`, `sprout remove`, …).
 - Integrate nicely with editors (Cursor, VS Code, …) without being editor-specific.
+- Support automated setup via hooks for consistent worktree environments.
 
 ---
 
@@ -22,255 +23,492 @@ Instead, all worktrees live under a central root:
 
 ```text
 $HOME/.sprout/
+```
 
 Within that, worktrees are grouped by repository identity:
 
-$HOME/.sprout/<repo-slug>-<repo-id>/<branch-path>/
+```text
+$HOME/.sprout/<repo-slug>-<repo-id>/<branch-path>/<repo-slug>/
+```
 
 	•	repo-slug: basename of the repo root
 	•	Example: repo at /Users/you/Projects/vl-widgets → repo-slug = vl-widgets
 	•	repo-id: a short, stable identifier derived from the repo path
 	•	Example: repo-id = sha1(<absolute-repo-root>)[:8]
-	•	Ensures two different clones with the same name don’t collide
+	•	Ensures two different clones with the same name don't collide
 	•	branch-path: the Git branch name, used as a path
 	•	Example: branch bugfix/handover-double-message
 → directory: bugfix/handover-double-message
+	•	repo-slug (again): the repo name is appended at the end to create the final worktree directory
 	•	sprout must ensure intermediate directories exist (mkdir -p).
 
 Examples
 
 Repo root:
 
+```
 /Users/maarten/Documents/Projects/vl-widgets
+```
 
 Branch:
 
+```
 bugfix/handover-double-message
+```
 
-Possible layout:
+Actual layout:
 
+```
 $HOME/.sprout/
   vl-widgets-a1b2c3d4/
     bugfix/
       handover-double-message/
-        # worktree files here
+        vl-widgets/
+          # worktree files here
+```
 
-sprout never touches the user’s project folder structure beyond reading Git metadata.
+sprout never touches the user's project folder structure beyond reading Git metadata.
 
 ⸻
 
-Repo detection
+## Repo detection
 
 For any command, sprout must:
-	1.	Run from somewhere inside a Git working directory.
-	2.	Resolve the repo root via:
+1. Run from somewhere inside a Git working directory.
+2. Resolve the repo root via:
 
+```bash
 git rev-parse --show-toplevel
+```
 
+3. Use that absolute path to compute:
+   - `repo-slug` = basename(repo-root)
+   - `repo-id` = sha1(repo-root)[:8]
+   - `repo-root` itself for Git commands that must run in the main worktree.
 
-	3.	Use that absolute path to compute:
-	•	repo-slug = basename(repo-root)
-	•	repo-id = sha1(repo-root)[:8]
-	•	repo-root itself for Git commands that must run in the main worktree.
-
-sprout should fail clearly if it’s not inside a Git repo.
+sprout should fail clearly if it's not inside a Git repo.
 
 ⸻
 
-Commands
+## Hooks System
 
-1. sprout add <branch>
+sprout supports automated setup and sync tasks via hooks defined in `.sprout.yml` at the repository root.
 
-Create a new worktree for <branch> under ~/.sprout.
+### Configuration File
 
-Behavior:
-	1.	Determine:
+Create a `.sprout.yml` file in your repository root:
 
+```yaml
+hooks:
+  on_create:
+    - npm ci
+    - npm run build
+  on_open:
+    - npm run lint:types
+```
+
+### Hook Types
+
+**`on_create`**: Runs automatically after creating a new worktree via `sprout add`
+- Ideal for: dependency installation, builds, database migrations, code generation
+
+**`on_open`**: Runs automatically when opening a worktree via `sprout open`
+- Ideal for: type checking, lightweight sync operations, code generation
+
+### Security Model
+
+Hooks execute arbitrary shell commands. For security, repositories must be explicitly trusted before hooks will run:
+
+```bash
+sprout trust
+```
+
+If hooks are defined but the repo is not trusted, sprout displays an error message and exits without running hooks.
+
+### Hook Execution
+
+- Commands run sequentially via `sh -lc "<command>"`
+- If a command fails, subsequent commands are skipped
+- Editor opens immediately, then hooks run in the terminal (allows working while hooks execute)
+- Can be skipped with `--skip-hooks` (for `add`) or `--no-hooks` (for `open`)
+
+### Environment Variables
+
+When hooks run, the following variables are available:
+
+- `SPROUT_REPO_ROOT`: Path to the git repository root
+- `SPROUT_WORKTREE_PATH`: Path to the current worktree
+- `SPROUT_HOOK_TYPE`: Either `on_create` or `on_open`
+
+### Config Fallback
+
+sprout looks for `.sprout.yml` in:
+1. Current worktree path first (worktree-specific config)
+2. Main worktree path as fallback (shared config, useful for gitignored configs)
+
+### Detailed Documentation
+
+See [HOOKS.md](HOOKS.md) for comprehensive documentation including examples, troubleshooting, and best practices.
+
+⸻
+
+## Commands
+
+### 1. sprout add [branch]
+
+Create a new worktree for `[branch]` under `~/.sprout`.
+
+**Interactive Mode:**
+
+If no branch is provided, sprout displays an interactive fuzzy finder with all available branches (local and remote) for selection.
+
+```bash
+sprout add
+# Opens fuzzy finder to select a branch
+```
+
+**Direct Mode:**
+
+```bash
+sprout add feat/new-feature
+```
+
+**Behavior:**
+
+1. Determine paths:
+
+```
 repo-root      = git rev-parse --show-toplevel
 repo-slug      = basename(repo-root)
 repo-id        = sha1(repo-root)[:8]
 worktree-root  = $HOME/.sprout/<repo-slug>-<repo-id>
-worktree-path  = <worktree-root>/<branch>  # branch used as nested path
+worktree-path  = <worktree-root>/<branch>/<repo-slug>
+```
 
+2. Check for `.sprout.yml` with `on_create` hooks:
+   - If hooks exist and `--skip-hooks` not set:
+     - Verify repository is trusted (see `sprout trust`)
+     - If not trusted, show helpful error message and exit
+   - If hooks exist and `--skip-hooks` is set, skip hook execution
 
-	2.	Check for .sprout.yml with on_create hooks:
-	•	If hooks exist and --skip-hooks not set:
-		•	Verify repository is trusted
-		•	If not trusted, show helpful error message and exit
-	•	If hooks exist and --skip-hooks is set, skip hook execution
+3. Check if worktree already exists:
+   - If it exists, open it in the editor
 
-	3.	If origin/<branch> exists (remote branch):
+4. Create the worktree using Git with the following fallback logic:
+   - If branch exists locally: checkout that branch
+   - Else if `origin/<branch>` exists: create local branch from remote with `--no-track` flag
+   - Else if `origin/main` exists: create new branch from `origin/main` with `--no-track`
+   - Else if local `main` exists: create new branch from `main` with `--no-track`
+   - Else: create new branch from `HEAD` with `--no-track`
 
-git -C <repo-root> worktree add <worktree-path> origin/<branch> -b <branch>
+   The `--no-track` flag prevents automatic upstream configuration for new branches.
 
+5. If hooks should run (repo is trusted and `.sprout.yml` has `on_create` hooks):
+   - Open the worktree in an editor immediately (unless `--no-open` is set)
+   - Run `on_create` hooks in the terminal
+   - This allows browsing code while dependencies install
 
-	4.	If it doesn't exist:
-	•	Create local branch from origin/main (or configurable default):
+6. If no hooks to run and `--no-open` not set:
+   - Open the worktree in an editor after creation
 
-git -C <repo-root> worktree add <worktree-path> -b <branch> origin/main
+**Flags:**
+- `--skip-hooks`: Skip running `on_create` hooks even if `.sprout.yml` exists
+- `--no-open`: Skip opening the worktree in an editor
 
-
-	5.	Open the worktree in an editor (unless --no-open is set).
-
-	6.	Run on_create hooks automatically if:
-	•	.sprout.yml exists with on_create hooks
-	•	Repository is trusted
-	•	--skip-hooks flag not set
-
-Flags:
-	•	--skip-hooks: Skip running on_create hooks even if .sprout.yml exists
-	•	--no-open: Skip opening the worktree in an editor
-
-Notes:
-	•	sprout must create parent directories: mkdir -p "$worktree-root/<parent-of-branch-path>".
-	•	If the worktree already exists at that path, sprout should detect it and either:
-	•	refuse with a clear message, or
-	•	offer an option to just open it.
+**Notes:**
+- sprout creates all parent directories automatically
+- If the worktree already exists, sprout opens it instead of failing
+- See [HOOKS.md](HOOKS.md) for detailed hook documentation
 
 ⸻
 
-2. sprout open [branch-or-path]
+### 2. sprout open [branch-or-path]
 
 Open an existing worktree in an editor.
 
-Modes:
-	1.	Interactive (sprout open)
-	•	Requires fzf.
-	•	List all worktrees for the current repo (excluding the main worktree).
-	•	Display something like:
+**Modes:**
 
-<branch>                      <path>
-bugfix/handover-double-message  /Users/.../.sprout/vl-widgets-a1b2c3d4/bugfix/handover-double-message
-feat/new-widget                 /Users/.../.sprout/vl-widgets-a1b2c3d4/feat/new-widget
+1. **Interactive** (`sprout open`)
+   - Lists all sprout-managed worktrees for the current repo (excludes main worktree)
+   - Display format:
 
+   ```
+   <branch>                        <path>
+   bugfix/handover-double-message  /Users/.../.sprout/vl-widgets-a1b2c3d4/bugfix/handover-double-message/vl-widgets
+   feat/new-widget                 /Users/.../.sprout/vl-widgets-a1b2c3d4/feat/new-widget/vl-widgets
+   ```
 
-	•	Use fzf to pick one.
-	•	Open the selected path in an editor.
+   - Use fuzzy finder to pick one
+   - Open the selected path in an editor
 
-	2.	Path (sprout open /some/path)
-	•	If the argument is an existing directory, treat it as the worktree path and open it.
-	3.	Branch (sprout open <branch>)
-	•	Compute worktree-path = $HOME/.sprout/<repo-slug>-<repo-id>/<branch>.
-	•	Open it if it exists; otherwise, show a helpful error ("no worktree for this branch").
+2. **Path** (`sprout open /some/path`)
+   - If the argument is an existing directory, treat it as the worktree path and open it
 
-Behavior:
-	1.	Check for .sprout.yml with on_open hooks:
-	•	If hooks exist and --no-hooks not set:
-		•	Verify repository is trusted
-		•	If not trusted, show helpful error message and exit
-	•	If hooks exist and --no-hooks is set, skip hook execution
+3. **Branch** (`sprout open <branch>`)
+   - Compute `worktree-path = $HOME/.sprout/<repo-slug>-<repo-id>/<branch>/<repo-slug>`
+   - Open it if it exists; otherwise, show a helpful error ("no worktree for this branch")
 
-	2.	Open the worktree in an editor
+**Behavior:**
 
-	3.	Run on_open hooks automatically if:
-	•	.sprout.yml exists with on_open hooks
-	•	Repository is trusted
-	•	--no-hooks flag not set
+1. Check for `.sprout.yml` with `on_open` hooks:
+   - If hooks exist and `--no-hooks` not set:
+     - Verify repository is trusted (see `sprout trust`)
+     - If not trusted, show helpful error message and exit
+   - If hooks exist and `--no-hooks` is set, skip hook execution
 
-Note: on_open hooks run after the editor is opened, allowing you to start browsing code while hooks execute in the terminal.
+2. Open the worktree in an editor immediately
 
-Flags:
-	•	--no-hooks: Skip running on_open hooks even if .sprout.yml exists
+3. Run `on_open` hooks automatically if:
+   - `.sprout.yml` exists with `on_open` hooks
+   - Repository is trusted
+   - `--no-hooks` flag not set
+
+**Note:** `on_open` hooks run after the editor is opened, allowing you to start browsing code while hooks execute in the terminal (e.g., type checking, code generation).
+
+**Flags:**
+- `--no-hooks`: Skip running `on_open` hooks even if `.sprout.yml` exists
 
 ⸻
 
-3. sprout remove [branch-or-path]
+### 3. sprout remove [branch-or-path]
 
 Remove an existing worktree.
 
-Modes:
-	1.	Interactive (sprout remove)
-	•	Requires fzf.
-	•	Same listing mechanism as open.
-	•	After selecting a worktree, run:
+**Modes:**
 
-git -C <repo-root> worktree remove <path>
+1. **Interactive** (`sprout remove`)
+   - Lists all sprout-managed worktrees for the current repo (excludes main worktree)
+   - Same listing mechanism as `sprout open`
+   - After selecting a worktree, removes it via:
 
+   ```bash
+   git -C <repo-root> worktree remove <path>
+   ```
 
-	•	Do not show/remove the main repo root.
+   - Main repo root is never shown in the list
 
-	2.	Path (sprout remove /some/path)
-	•	If argument is an existing directory, treat it as a worktree path and remove it.
-	3.	Branch (sprout remove <branch>)
-	•	Compute the path based on the repo + branch convention.
-	•	Remove that worktree.
+2. **Path** (`sprout remove /some/path`)
+   - If argument is an existing directory, treat it as a worktree path and remove it
+   - Safety check: refuses to remove non-sprout worktrees (not under `~/.sprout`)
 
-Notes:
-	•	Consider a --force flag to pass --force to git worktree remove.
-	•	If the path is not a known worktree, sprout should fail clearly.
+3. **Branch** (`sprout remove <branch>`)
+   - Compute path: `$HOME/.sprout/<repo-slug>-<repo-id>/<branch>/<repo-slug>`
+   - Remove that worktree if it exists
 
-⸻
+**Behavior:**
 
-4. sprout list
+1. Validate the path is a sprout-managed worktree (under `~/.sprout`)
+2. Remove the worktree via `git worktree remove`
+3. Automatically run `git worktree prune` to clean up stale references
 
-List worktrees for the current repo.
-	•	Wraps git worktree list --porcelain and pretty-prints:
+**Flags:**
+- `--force`: Force removal even if the worktree has uncommitted changes
 
-main      /path/to/main/repo
-bugfix/...  /Users/.../.sprout/vl-widgets-a1b2c3d4/bugfix/handover-double-message
-feat/...    /Users/.../.sprout/vl-widgets-a1b2c3d4/feat/new-widget
-
-
-	•	Optionally support flags such as:
-	•	--all (future: cross-repo listing)
-	•	--raw to print raw Git output.
+**Notes:**
+- If the path is not a known worktree, sprout fails with a clear error message
+- sprout refuses to remove worktrees that aren't managed by sprout (safety feature)
 
 ⸻
 
-Editor integration
+### 4. sprout list
 
-When opening a worktree (via sprout open or optionally after sprout add), sprout should attempt, in order:
-	1.	Use a configured editor command if present (future config, e.g. $SPROUT_EDITOR or config file).
-	2.	Platform-aware defaults, e.g. on macOS:
-	•	open -a "Cursor" <path>
-	•	fallback: cursor <path>
-	•	fallback: code <path>
-	•	fallback: open <path>
+List sprout-managed worktrees for the current repo.
 
-All editor spawning should be non-blocking from the CLI perspective.
+**Behavior:**
 
-⸻
+- Wraps `git worktree list --porcelain` and filters to show only sprout-managed worktrees
+- Excludes the main worktree from output
+- Pretty-prints in tabular format:
 
-External dependencies
-	•	Git (obviously) must be available on PATH.
+```
+bugfix/handover-double-message   /Users/.../.sprout/vl-widgets-a1b2c3d4/bugfix/handover-double-message/vl-widgets
+feat/new-widget                  /Users/.../.sprout/vl-widgets-a1b2c3d4/feat/new-widget/vl-widgets
+```
 
-fzf shouldn't be an external dependency. It should be included in sprout.
-
-⸻
-
-Implementation notes
-	•	Language: Go.
-	•	Use os/exec to invoke git.
-	•	Resolve repo root with git rev-parse --show-toplevel.
-	•	Compute repo-id with a stable hash function (e.g. SHA-1 or SHA-256 truncated).
-	•	Carefully handle spaces in paths and branch names (quote shell arguments correctly).
-
-CLI structure:
-	•	Either a minimal custom flag parser or a small framework like Cobra.
-	•	Commands:
-	•	sprout add
-	•	sprout open
-	•	sprout remove (automatically prunes stale references)
-	•	sprout list
-
-Aim for small, composable subcommand handlers that are easy to test.
+**Notes:**
+- Only shows worktrees under `~/.sprout` for the current repository
+- Main worktree is intentionally excluded from the list
 
 ⸻
 
-Non-goals for v1
-	•	No custom Git plumbing beyond calling git worktree and basic git commands.
-	•	No inspection or manipulation of commits, diffs, or PRs.
-	•	No global multi-repo dashboard (beyond possibly a simple list per repo).
-	•	No persistent configuration beyond simple environment-based behavior.
+### 5. sprout trust [path]
+
+Trust a repository to allow running hooks defined in `.sprout.yml`.
+
+**Usage:**
+
+```bash
+# Trust current repository
+sprout trust
+
+# Trust specific repository
+sprout trust /path/to/repo
+```
+
+**Behavior:**
+
+1. If no path provided, uses the main worktree path of the current repository
+2. Validates the path is a Git repository
+3. Checks if already trusted
+4. Adds the repository root path to `~/.config/sprout/trusted-projects.json`
+
+**Security Model:**
+
+Hooks can execute arbitrary commands on your system. sprout requires explicit trust before running any hooks to prevent malicious code execution from untrusted sources.
+
+**⚠️ WARNING:** Only trust repositories you control or have reviewed the `.sprout.yml` file for.
+
+**Trust Storage:**
+
+Trusted repositories are stored in `~/.config/sprout/trusted-projects.json`:
+
+```json
+{
+  "version": 1,
+  "trusted": [
+    {
+      "repo_root": "/Users/you/projects/my-repo",
+      "trusted_at": "2025-12-12T21:15:00Z"
+    }
+  ]
+}
+```
 
 ⸻
 
-Future ideas (out of scope for v1)
-	•	Config file (~/.config/sprout/config.yaml) for:
-	•	Default base branch (e.g. develop instead of main)
-	•	Editor command
-	•	Custom sprout root (override ~/.sprout)
-	•	Cross-repo overview: sprout list --all (scan ~/.sprout and show everything).
-	•	PR integration (e.g. sprout add --pr 123).
-	•	A TUI mode that shows worktrees and their status using a single terminal UI.
+### 6. sprout hooks
+
+Display hook configuration status for the current repository.
+
+**Usage:**
+
+```bash
+sprout hooks
+```
+
+**Output includes:**
+
+- Whether `.sprout.yml` exists and its location
+- Trust status of the repository
+- List of defined `on_create` hooks
+- List of defined `on_open` hooks
+- Commands that will trigger hooks
+- Instructions for trusting the repository if not trusted
+
+**Example output:**
+
+```
+Repository: /Users/you/projects/my-repo
+
+✅ Config file: /Users/you/projects/my-repo/.sprout.yml
+
+✅ Repository is trusted
+
+on_create hooks:
+  1. npm ci
+  2. npm run build
+
+on_open hooks:
+  1. npm run lint:types
+
+Hooks run automatically when:
+  - sprout add           (runs on_create)
+  - sprout open          (runs on_open)
+
+Use --skip-hooks or --no-hooks flags to skip automatic execution.
+```
+
+⸻
+
+## Editor integration
+
+When opening a worktree (via `sprout open` or after `sprout add`), sprout attempts to open an editor in this order:
+
+1. Use a configured editor command if present (future config, e.g. `$SPROUT_EDITOR` or config file)
+2. Platform-aware defaults, e.g. on macOS:
+   - `open -a "Cursor" <path>`
+   - fallback: `cursor <path>`
+   - fallback: `code <path>`
+   - fallback: `open <path>`
+
+All editor spawning is non-blocking from the CLI perspective.
+
+⸻
+
+## External dependencies
+
+**Required:**
+- Git must be available on PATH
+
+**Interactive Selection:**
+- sprout uses `github.com/ktr0731/go-fuzzyfinder` for interactive selection (embedded, no external fzf required)
+- Provides fuzzy finding for branch and worktree selection
+
+**Shell Completion:**
+- Branch name completion available for `add`, `open`, `remove` commands
+- Enable via: `sprout completion [bash|zsh|fish|powershell]`
+
+⸻
+
+## Implementation notes
+
+**Language:** Go
+
+**Key Technologies:**
+- `os/exec` to invoke git commands
+- Cobra for CLI structure and shell completion
+- `github.com/ktr0731/go-fuzzyfinder` for interactive selection
+- `gopkg.in/yaml.v3` for `.sprout.yml` parsing
+
+**Architecture:**
+- Resolve repo root with `git rev-parse --show-toplevel`
+- Compute `repo-id` with SHA-1 truncated to 8 characters
+- Carefully handle spaces in paths and branch names
+
+**Commands:**
+- `sprout add` - Create worktrees (with optional hooks)
+- `sprout open` - Open worktrees (with optional hooks)
+- `sprout remove` - Remove worktrees (automatically prunes stale references)
+- `sprout list` - List sprout-managed worktrees
+- `sprout trust` - Trust repositories for hook execution
+- `sprout hooks` - Display hook configuration status
+- `sprout completion` - Generate shell completion scripts
+
+**Design principles:**
+- Small, composable subcommand handlers
+- Clear error messages
+- Non-blocking editor launching
+- Safe by default (trust model for hooks)
+
+⸻
+
+## Non-goals
+
+- No custom Git plumbing beyond calling `git worktree` and basic git commands
+- No inspection or manipulation of commits, diffs, or PRs
+- No global multi-repo dashboard (currently scoped to single repo at a time)
+- No complex configuration files beyond `.sprout.yml` for hooks
+
+⸻
+
+## Future ideas
+
+Potential enhancements not yet implemented:
+
+**Configuration:**
+- Global config file (`~/.config/sprout/config.yaml`) for:
+  - Default base branch (e.g. `develop` instead of `main`)
+  - Editor command override
+  - Custom sprout root (override `~/.sprout`)
+
+**Features:**
+- Cross-repo overview: `sprout list --all` (scan `~/.sprout` and show everything)
+- PR integration (e.g. `sprout add --pr 123`)
+- A TUI mode that shows worktrees and their status using a single terminal UI
+- `.sprout.local.yml` for per-developer overrides (useful for local customizations)
+- Per-hook timeouts
+- Hooks for other lifecycle events (e.g., `on_remove`)
+- OS-specific hooks
+- Parallel hook execution
+- Hook execution history and logs
 
