@@ -13,6 +13,11 @@ var rootCmd = &cobra.Command{
 	Long:  `sprout is a lightweight Go CLI tool for managing Git worktrees.`,
 }
 
+func init() {
+	// Enable shell completion command
+	rootCmd.CompletionOptions.DisableDefaultCmd = false
+}
+
 // Execute adds all child commands to the root command and sets flags appropriately.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {

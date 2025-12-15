@@ -22,6 +22,38 @@ var openCmd = &cobra.Command{
 	Use:   "open [branch-or-path]",
 	Short: "Open a worktree",
 	Args:  cobra.MaximumNArgs(1),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		// Only complete the first argument
+		if len(args) > 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		repoRoot, err := git.GetRepoRoot()
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		sproutRoot, err := sprout.GetWorktreeRoot(repoRoot)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		worktrees, err := git.ListWorktrees(repoRoot)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		choices := filterSproutWorktrees(worktrees, sproutRoot)
+
+		var completions []string
+		for _, wt := range choices {
+			if wt.Branch != "" {
+				completions = append(completions, wt.Branch)
+			}
+		}
+
+		return completions, cobra.ShellCompDirectiveNoFileComp
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		repoRoot, err := git.GetRepoRoot()
 		if err != nil {

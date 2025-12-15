@@ -24,6 +24,29 @@ var addCmd = &cobra.Command{
 	Use:   "add [branch]",
 	Short: "Create a new worktree",
 	Args:  cobra.MaximumNArgs(1),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		// Only complete the first argument
+		if len(args) > 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		repoRoot, err := git.GetRepoRoot()
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		branches, err := git.ListAllBranches(repoRoot)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		var completions []string
+		for _, branch := range branches {
+			completions = append(completions, branch.DisplayName)
+		}
+
+		return completions, cobra.ShellCompDirectiveNoFileComp
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		var branch string
 
