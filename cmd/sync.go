@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/m44rten1/sprout/internal/config"
 	"github.com/m44rten1/sprout/internal/git"
 	"github.com/m44rten1/sprout/internal/hooks"
 
@@ -37,6 +38,30 @@ This is useful for:
 		mainWorktreePath, err := git.GetMainWorktreePath()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to get main worktree path: %v\n", err)
+			os.Exit(1)
+		}
+
+		// Check if hooks exist but are untrusted
+		untrusted, err := hooks.CheckAndPrintUntrusted(repoRoot, mainWorktreePath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to check trust status: %v\n", err)
+			os.Exit(1)
+		}
+
+		if untrusted {
+			// Hooks exist but repo is not trusted
+			os.Exit(1)
+		}
+
+		// Verify on_open hooks actually exist
+		cfg, err := config.Load(repoRoot, mainWorktreePath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
+			os.Exit(1)
+		}
+
+		if !cfg.HasOpenHooks() {
+			fmt.Fprintf(os.Stderr, "Error: no on_open hooks configured for this repository\n")
 			os.Exit(1)
 		}
 

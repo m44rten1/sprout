@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/m44rten1/sprout/internal/config"
 	"github.com/m44rten1/sprout/internal/editor"
 	"github.com/m44rten1/sprout/internal/git"
 	"github.com/m44rten1/sprout/internal/hooks"
@@ -74,6 +75,39 @@ var addCmd = &cobra.Command{
 				fmt.Fprintf(os.Stderr, "Failed to open editor: %v\n", err)
 			}
 			return
+		}
+
+		// If --init is specified, verify hooks exist and are trusted before creating the worktree
+		if initFlag {
+			mainWorktreePath, err := git.GetMainWorktreePath()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to get main worktree path: %v\n", err)
+				os.Exit(1)
+			}
+
+			// Check if hooks exist but are untrusted
+			untrusted, err := hooks.CheckAndPrintUntrusted(repoRoot, mainWorktreePath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to check trust status: %v\n", err)
+				os.Exit(1)
+			}
+
+			if untrusted {
+				// Hooks exist but repo is not trusted - abort before creating worktree
+				os.Exit(1)
+			}
+
+			// If we reach here and --init was used, verify on_create hooks actually exist
+			cfg, err := config.Load(repoRoot, mainWorktreePath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
+				os.Exit(1)
+			}
+
+			if !cfg.HasCreateHooks() {
+				fmt.Fprintf(os.Stderr, "Error: --init flag specified but no on_create hooks configured for this repository\n")
+				os.Exit(1)
+			}
 		}
 
 		fmt.Printf("Creating worktree for %s at %s...\n", branch, worktreePath)
