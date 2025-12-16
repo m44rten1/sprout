@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	noHooksFlag bool
+	openNoHooksFlag bool
 )
 
 var openCmd = &cobra.Command{
@@ -125,7 +125,7 @@ var openCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		shouldRunHooks := cfg.HasOpenHooks() && !noHooksFlag
+		shouldRunHooks := cfg.HasOpenHooks() && !openNoHooksFlag
 
 		// If hooks should run, verify repo is trusted before opening
 		if shouldRunHooks {
@@ -164,5 +164,5 @@ var openCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(openCmd)
-	openCmd.Flags().BoolVar(&noHooksFlag, "no-hooks", false, "Skip running on_open hooks even if .sprout.yml exists")
+	openCmd.Flags().BoolVar(&openNoHooksFlag, "no-hooks", false, "Skip running on_open hooks even if .sprout.yml exists")
 }

@@ -16,8 +16,8 @@ import (
 )
 
 var (
-	skipHooksFlag bool
-	noOpenFlag    bool
+	addNoHooksFlag bool
+	noOpenFlag     bool
 )
 
 var addCmd = &cobra.Command{
@@ -173,7 +173,7 @@ var addCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		shouldRunHooks := cfg.HasCreateHooks() && !skipHooksFlag
+		shouldRunHooks := cfg.HasCreateHooks() && !addNoHooksFlag
 
 		// If hooks should run, verify repo is trusted before creating worktree
 		if shouldRunHooks {
@@ -277,6 +277,6 @@ var addCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(addCmd)
-	addCmd.Flags().BoolVar(&skipHooksFlag, "skip-hooks", false, "Skip running on_create hooks even if .sprout.yml exists")
+	addCmd.Flags().BoolVar(&addNoHooksFlag, "no-hooks", false, "Skip running on_create hooks even if .sprout.yml exists")
 	addCmd.Flags().BoolVar(&noOpenFlag, "no-open", false, "Skip opening the worktree in an editor")
 }
