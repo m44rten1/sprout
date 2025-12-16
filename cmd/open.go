@@ -37,17 +37,8 @@ var openCmd = &cobra.Command{
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		// Filter to sprout worktrees (check all possible sprout roots)
-		sproutRoots := getPossibleSproutRoots()
-		var choices []git.Worktree
-		for _, wt := range worktrees {
-			for _, sproutRoot := range sproutRoots {
-				if isUnderSproutRoot(wt.Path, sproutRoot) {
-					choices = append(choices, wt)
-					break
-				}
-			}
-		}
+		// Filter to sprout worktrees
+		choices := filterSproutWorktreesAllRoots(worktrees)
 
 		var completions []string
 		for _, wt := range choices {
@@ -75,17 +66,8 @@ var openCmd = &cobra.Command{
 				os.Exit(1)
 			}
 
-			// Filter to sprout worktrees (check all possible sprout roots)
-			sproutRoots := getPossibleSproutRoots()
-			var choices []git.Worktree
-			for _, wt := range worktrees {
-				for _, sproutRoot := range sproutRoots {
-					if isUnderSproutRoot(wt.Path, sproutRoot) {
-						choices = append(choices, wt)
-						break
-					}
-				}
-			}
+			// Filter to sprout worktrees
+			choices := filterSproutWorktreesAllRoots(worktrees)
 
 			if len(choices) == 0 {
 				fmt.Println("No sprout-managed worktrees found.")
@@ -119,24 +101,9 @@ var openCmd = &cobra.Command{
 					os.Exit(1)
 				}
 
-				// Filter to sprout worktrees and find matching branch
-				sproutRoots := getPossibleSproutRoots()
+				// Find matching sprout worktree by branch
 				var found bool
-				for _, wt := range worktrees {
-					if wt.Branch == arg {
-						for _, sproutRoot := range sproutRoots {
-							if isUnderSproutRoot(wt.Path, sproutRoot) {
-								targetPath = wt.Path
-								found = true
-								break
-							}
-						}
-						if found {
-							break
-						}
-					}
-				}
-
+				targetPath, found = findWorktreeByBranch(worktrees, arg)
 				if !found {
 					fmt.Fprintf(os.Stderr, "No sprout-managed worktree found for branch '%s'\n", arg)
 					os.Exit(1)

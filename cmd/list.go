@@ -54,18 +54,8 @@ Clean worktrees show no indicators.`,
 		// First worktree is always the main repo
 		mainWorktree := worktrees[0]
 
-		// Filter to only sprout-managed worktrees (check ALL possible sprout roots)
-		sproutRoots := getPossibleSproutRoots()
-		var sproutWorktrees []git.Worktree
-		for _, wt := range worktrees[1:] { // Skip main worktree
-			for _, sproutRoot := range sproutRoots {
-				if isUnderSproutRoot(wt.Path, sproutRoot) {
-					sproutWorktrees = append(sproutWorktrees, wt)
-					break
-				}
-			}
-		}
-
+		// Filter to only sprout-managed worktrees (skip main worktree)
+		sproutWorktrees := filterSproutWorktreesAllRoots(worktrees[1:])
 		sproutWorktrees = filterExistingWorktrees(sproutWorktrees)
 
 		if len(sproutWorktrees) == 0 {
@@ -376,22 +366,7 @@ func discoverAllSproutRepos() ([]RepoWorktrees, error) {
 			mainRepoRoot := worktrees[0].Path
 
 			// Filter to only sprout-managed worktrees (exclude main repo)
-			// Check against all possible sprout roots, not just the discovered directory
-			var sproutWorktrees []git.Worktree
-			sproutRoots := getPossibleSproutRoots()
-			for _, wt := range worktrees {
-				isUnderAnySproutRoot := false
-				for _, sproutRoot := range sproutRoots {
-					if isUnderSproutRoot(wt.Path, sproutRoot) {
-						isUnderAnySproutRoot = true
-						break
-					}
-				}
-				if isUnderAnySproutRoot {
-					sproutWorktrees = append(sproutWorktrees, wt)
-				}
-			}
-
+			sproutWorktrees := filterSproutWorktreesAllRoots(worktrees)
 			if len(sproutWorktrees) == 0 {
 				return
 			}
@@ -411,25 +386,6 @@ func discoverAllSproutRepos() ([]RepoWorktrees, error) {
 
 	wg.Wait()
 	return allRepos, nil
-}
-
-// getPossibleSproutRoots returns all possible sprout root directories
-func getPossibleSproutRoots() []string {
-	var roots []string
-
-	// Add XDG_DATA_HOME location if set
-	if xdgData := os.Getenv("XDG_DATA_HOME"); xdgData != "" {
-		roots = append(roots, filepath.Join(xdgData, "sprout"))
-	}
-
-	// Add ~/.local/share/sprout
-	if home, err := os.UserHomeDir(); err == nil {
-		roots = append(roots, filepath.Join(home, ".local", "share", "sprout"))
-		// Add ~/.sprout for backward compatibility
-		roots = append(roots, filepath.Join(home, ".sprout"))
-	}
-
-	return roots
 }
 
 // findFirstWorktree does a shallow scan to find any worktree in the repo directory.
