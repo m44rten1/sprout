@@ -60,15 +60,15 @@ Hooks can execute arbitrary commands on your system.`,
 			os.Exit(1)
 		}
 
-		fmt.Println()
-		fmt.Printf("✅ Repository trusted: %s\n", repoRoot)
-		fmt.Println()
-		fmt.Println("Hooks defined in .sprout.yml will now run when you use:")
-		fmt.Println("  - sprout add --init")
-		fmt.Println("  - sprout open --sync")
-		fmt.Println("  - sprout init")
-		fmt.Println("  - sprout sync")
-		fmt.Println()
+	fmt.Println()
+	fmt.Printf("✅ Repository trusted: %s\n", repoRoot)
+	fmt.Println()
+	fmt.Println("Hooks defined in .sprout.yml will now run automatically:")
+	fmt.Println("  - sprout add           (runs on_create hooks)")
+	fmt.Println("  - sprout open          (runs on_open hooks)")
+	fmt.Println()
+	fmt.Println("Use --no-hooks flag to skip automatic execution.")
+	fmt.Println()
 	},
 }
 
