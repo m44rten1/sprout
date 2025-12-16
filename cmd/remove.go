@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/m44rten1/sprout/internal/git"
+	"github.com/m44rten1/sprout/internal/sprout"
 	"github.com/m44rten1/sprout/internal/tui"
 
 	"github.com/spf13/cobra"
@@ -105,7 +106,7 @@ var removeCmd = &cobra.Command{
 
 		// Verify the target is under a sprout root
 		isSproutWorktree := false
-		for _, sproutRoot := range getPossibleSproutRoots() {
+		for _, sproutRoot := range sprout.GetAllPossibleSproutRoots() {
 			if isUnderSproutRoot(targetPath, sproutRoot) {
 				isSproutWorktree = true
 				break

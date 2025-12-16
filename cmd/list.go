@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/m44rten1/sprout/internal/git"
+	"github.com/m44rten1/sprout/internal/sprout"
 
 	"github.com/spf13/cobra"
 )
@@ -312,7 +313,7 @@ func listAllRepos() {
 // discoverAllSproutRepos scans all possible sprout directories and discovers all managed repositories
 func discoverAllSproutRepos() ([]RepoWorktrees, error) {
 	// Get all possible sprout root directories
-	sproutRoots := getPossibleSproutRoots()
+	sproutRoots := sprout.GetAllPossibleSproutRoots()
 
 	// Collect all repo directories from all sprout roots
 	var repoDirs []string

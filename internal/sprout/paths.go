@@ -10,17 +10,32 @@ import (
 // GetSproutRoot returns the root directory for sprout worktrees.
 // Respects XDG_DATA_HOME, falling back to ~/.local/share/sprout
 func GetSproutRoot() (string, error) {
-	// Use XDG_DATA_HOME if set, otherwise default to ~/.local/share
+	roots := GetAllPossibleSproutRoots()
+	if len(roots) == 0 {
+		return "", fmt.Errorf("failed to get user home directory")
+	}
+	return roots[0], nil
+}
+
+// GetAllPossibleSproutRoots returns all possible sprout root directories,
+// including legacy locations for backward compatibility.
+// Order: XDG_DATA_HOME/sprout, ~/.local/share/sprout, ~/.sprout (legacy)
+func GetAllPossibleSproutRoots() []string {
+	var roots []string
+
+	// Add XDG_DATA_HOME location if set
 	if xdgData := os.Getenv("XDG_DATA_HOME"); xdgData != "" {
-		return filepath.Join(xdgData, "sprout"), nil
+		roots = append(roots, filepath.Join(xdgData, "sprout"))
 	}
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("failed to get user home directory: %w", err)
+	// Add ~/.local/share/sprout and legacy ~/.sprout
+	if home, err := os.UserHomeDir(); err == nil {
+		roots = append(roots, filepath.Join(home, ".local", "share", "sprout"))
+		// Add ~/.sprout for backward compatibility
+		roots = append(roots, filepath.Join(home, ".sprout"))
 	}
 
-	return filepath.Join(home, ".local", "share", "sprout"), nil
+	return roots
 }
 
 // GetRepoID computes a stable identifier for a repository based on its absolute path.
