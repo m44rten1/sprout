@@ -2,7 +2,6 @@ package git
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 )
@@ -31,28 +30,6 @@ func GetMainWorktreePath() (string, error) {
 	}
 
 	return worktrees[0].Path, nil
-}
-
-// WorktreeAdd creates a new worktree.
-func WorktreeAdd(repoRoot, path, branch, base string) error {
-	// Ensure parent directory exists
-	if err := os.MkdirAll(repoRoot, 0755); err != nil {
-		// This might be wrong, we need to mkdir the PARENT of the worktree path, not repoRoot
-		// But actually `git worktree add` might complain if parent doesn't exist?
-		// The spec says: sprout must create parent directories.
-	}
-	// We'll handle mkdir in the caller or here properly.
-	// Let's just run the git command for now, the caller should handle mkdir.
-
-	// Check if remote branch exists
-	// For now, we'll assume the caller has decided on the arguments.
-	// But wait, the spec says:
-	// If origin/<branch> exists: git worktree add <path> origin/<branch> -b <branch>
-	// If not: git worktree add <path> -b <branch> origin/main
-
-	// Let's make this function simple: just run git worktree add with given args.
-	// We'll add a higher level function to handle the logic.
-	return nil
 }
 
 // RunGitCommand runs a git command in the given directory.
