@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/m44rten1/sprout/internal/git"
 	"github.com/spf13/cobra"
@@ -40,7 +41,7 @@ Pruning before repair may cause loss of metadata for moved worktrees.`,
 		errorCount := 0
 
 		for _, repo := range allRepos {
-			repoName := getRepoName(repo.RepoRoot)
+			repoName := filepath.Base(repo.RepoRoot)
 			fmt.Printf("📦 %s\n", repoName)
 
 			// Run git worktree repair
@@ -82,16 +83,5 @@ Pruning before repair may cause loss of metadata for moved worktrees.`,
 func init() {
 	rootCmd.AddCommand(repairCmd)
 	repairCmd.Flags().BoolVarP(&repairPruneFlag, "prune", "p", false, "Also prune stale worktree references")
-}
-
-// getRepoName extracts a simple name from the repo root path
-func getRepoName(repoRoot string) string {
-	parts := []rune(repoRoot)
-	for i := len(parts) - 1; i >= 0; i-- {
-		if parts[i] == '/' {
-			return string(parts[i+1:])
-		}
-	}
-	return repoRoot
 }
 
