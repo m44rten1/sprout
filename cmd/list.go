@@ -46,10 +46,18 @@ Clean worktrees show no indicators.`,
 			os.Exit(1)
 		}
 
+		if len(worktrees) == 0 {
+			fmt.Println("No worktrees found.")
+			return
+		}
+
+		// First worktree is always the main repo
+		mainWorktree := worktrees[0]
+
 		// Filter to only sprout-managed worktrees (check ALL possible sprout roots)
 		sproutRoots := getPossibleSproutRoots()
 		var sproutWorktrees []git.Worktree
-		for _, wt := range worktrees {
+		for _, wt := range worktrees[1:] { // Skip main worktree
 			for _, sproutRoot := range sproutRoots {
 				if isUnderSproutRoot(wt.Path, sproutRoot) {
 					sproutWorktrees = append(sproutWorktrees, wt)
@@ -59,12 +67,13 @@ Clean worktrees show no indicators.`,
 		}
 
 		sproutWorktrees = filterExistingWorktrees(sproutWorktrees)
-		if len(sproutWorktrees) == 0 {
-			fmt.Println("No sprout-managed worktrees found.")
-			return
-		}
 
 		// Add spacing from prompt
+		fmt.Println()
+
+		// Print repo header
+		repoName := filepath.Base(mainWorktree.Path)
+		fmt.Printf("📦 \033[1m%s\033[0m\n", repoName)
 		fmt.Println()
 
 		// Collect output lines with styling
@@ -72,12 +81,37 @@ Clean worktrees show no indicators.`,
 			label  string
 			status string
 			path   string
+			isMain bool
 		}
 
-		// Collect status in parallel
-		lines := make([]outputLine, len(sproutWorktrees))
+		// Collect status in parallel (including main worktree)
+		totalLines := 1 + len(sproutWorktrees) // main + sprouts
+		lines := make([]outputLine, totalLines)
 		var wg sync.WaitGroup
 
+		// Process main worktree
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			branch := mainWorktree.Branch
+			if branch == "" {
+				branch = "(detached)"
+			}
+
+			// Get status indicators for main branch too
+			wtStatus := git.GetWorktreeStatus(mainWorktree.Path)
+			statusEmojis := buildStatusEmojis(wtStatus)
+
+			lines[0] = outputLine{
+				label:  "  🏠 \033[32m" + branch + "\033[0m",
+				status: statusEmojis,
+				path:   "\033[90m" + mainWorktree.Path + "\033[0m",
+				isMain: true,
+			}
+		}()
+
+		// Process sprout worktrees
 		for i, wt := range sproutWorktrees {
 			wg.Add(1)
 			go func(idx int, worktree git.Worktree) {
@@ -92,46 +126,27 @@ Clean worktrees show no indicators.`,
 				wtStatus := git.GetWorktreeStatus(worktree.Path)
 				statusEmojis := buildStatusEmojis(wtStatus)
 
-				lines[idx] = outputLine{
-					label:  "\033[32m" + branch + "\033[0m",
+				lines[idx+1] = outputLine{
+					label:  "  🌱 \033[32m" + branch + "\033[0m",
 					status: statusEmojis,
 					path:   "\033[90m" + worktree.Path + "\033[0m",
+					isMain: false,
 				}
 			}(i, wt)
 		}
 
 		wg.Wait()
 
-		// Calculate the maximum label width (without ANSI codes) for alignment
-		maxLabelWidth := 0
-		maxStatusWidth := 0
-		hasAnyStatus := false
+		// Print with multi-line format for better readability
 		for _, line := range lines {
-			labelWidth := visualWidth(line.label)
-			if labelWidth > maxLabelWidth {
-				maxLabelWidth = labelWidth
-			}
-			statusWidth := visualWidth(line.status)
-			if statusWidth > maxStatusWidth {
-				maxStatusWidth = statusWidth
-			}
+			// Branch + status on first line, path indented below
 			if line.status != "" {
-				hasAnyStatus = true
-			}
-		}
-
-		// Print with manual padding for consistent alignment
-		for _, line := range lines {
-			labelWidth := visualWidth(line.label)
-			labelPadding := maxLabelWidth - labelWidth + 3
-
-			if hasAnyStatus {
-				statusWidth := visualWidth(line.status)
-				statusPadding := maxStatusWidth - statusWidth + 3
-				fmt.Printf("%s%*s%s%*s%s\n", line.label, labelPadding, "", line.status, statusPadding, "", line.path)
+				fmt.Printf("%s   %s\n", line.label, line.status)
 			} else {
-				fmt.Printf("%s%*s%s\n", line.label, labelPadding, "", line.path)
+				fmt.Printf("%s\n", line.label)
 			}
+			fmt.Printf("     %s\n", line.path)
+			fmt.Println() // Blank line after each worktree
 		}
 	},
 }
@@ -174,14 +189,8 @@ func listAllRepos() {
 		status           string
 		path             string
 		needsBlankBefore bool
-	}
-
-	// Pre-calculate total lines needed
-	totalLines := 0
-	for _, repo := range allRepos {
-		if len(repo.Worktrees) > 0 {
-			totalLines += 1 + len(repo.Worktrees) // repo header + worktrees
-		}
+		isRepoHeader     bool
+		isMain           bool
 	}
 
 	first := true
@@ -192,8 +201,8 @@ func listAllRepos() {
 		worktree     git.Worktree
 		isRepoHeader bool
 		repoName     string
-		repoRoot     string
 		needsBlank   bool
+		isMain       bool
 	}
 
 	var jobs []worktreeJob
@@ -204,24 +213,39 @@ func listAllRepos() {
 			continue
 		}
 
-		repoName := filepath.Base(repo.RepoRoot)
+		// Get all worktrees for this repo to find main branch
+		allWorktrees, err := git.ListWorktrees(repo.RepoRoot)
+		if err != nil || len(allWorktrees) == 0 {
+			continue
+		}
+
+		mainWorktree := allWorktrees[0]
+		repoName := filepath.Base(mainWorktree.Path)
 
 		// Add repo header
 		jobs = append(jobs, worktreeJob{
 			lineIdx:      lineIdx,
 			isRepoHeader: true,
 			repoName:     repoName,
-			repoRoot:     repo.RepoRoot,
 			needsBlank:   !first,
 		})
 		lineIdx++
 		first = false
 
-		// Add worktree jobs
+		// Add main worktree
+		jobs = append(jobs, worktreeJob{
+			lineIdx:  lineIdx,
+			worktree: mainWorktree,
+			isMain:   true,
+		})
+		lineIdx++
+
+		// Add sprout worktree jobs
 		for _, wt := range repo.Worktrees {
 			jobs = append(jobs, worktreeJob{
 				lineIdx:  lineIdx,
 				worktree: wt,
+				isMain:   false,
 			})
 			lineIdx++
 		}
@@ -238,10 +262,11 @@ func listAllRepos() {
 
 			if j.isRepoHeader {
 				results[j.lineIdx] = outputLine{
-					label:            "📦 \033[1m" + j.repoName + "\033[0m",
+					label:            "📦 \033[1m" + j.repoName + "\033[0m\n",
 					status:           "",
-					path:             "\033[90m" + j.repoRoot + "\033[0m",
+					path:             "",
 					needsBlankBefore: j.needsBlank,
+					isRepoHeader:     true,
 				}
 			} else {
 				branch := j.worktree.Branch
@@ -253,10 +278,17 @@ func listAllRepos() {
 				wtStatus := git.GetWorktreeStatus(j.worktree.Path)
 				statusEmojis := buildStatusEmojis(wtStatus)
 
+				label := "  🏠 \033[32m" + branch + "\033[0m"
+				if !j.isMain {
+					label = "  🌱 \033[32m" + branch + "\033[0m"
+				}
+
 				results[j.lineIdx] = outputLine{
-					label:  "  \033[32m" + branch + "\033[0m",
-					status: statusEmojis,
-					path:   "\033[90m" + j.worktree.Path + "\033[0m",
+					label:        label,
+					status:       statusEmojis,
+					path:         "\033[90m" + j.worktree.Path + "\033[0m",
+					isRepoHeader: false,
+					isMain:       j.isMain,
 				}
 			}
 		}(job)
@@ -265,39 +297,24 @@ func listAllRepos() {
 	wg.Wait()
 	lines := results
 
-	// Calculate the maximum label and status width (without ANSI codes) for alignment
-	maxLabelWidth := 0
-	maxStatusWidth := 0
-	hasAnyStatus := false
-	for _, line := range lines {
-		labelWidth := visualWidth(line.label)
-		if labelWidth > maxLabelWidth {
-			maxLabelWidth = labelWidth
-		}
-		statusWidth := visualWidth(line.status)
-		if statusWidth > maxStatusWidth {
-			maxStatusWidth = statusWidth
-		}
-		if line.status != "" {
-			hasAnyStatus = true
-		}
-	}
-
-	// Print with manual padding for consistent alignment
+	// Print with multi-line format for better readability
 	for _, line := range lines {
 		if line.needsBlankBefore {
 			fmt.Println()
 		}
 
-		labelWidth := visualWidth(line.label)
-		labelPadding := maxLabelWidth - labelWidth + 3
-
-		if hasAnyStatus {
-			statusWidth := visualWidth(line.status)
-			statusPadding := maxStatusWidth - statusWidth + 3
-			fmt.Printf("%s%*s%s%*s%s\n", line.label, labelPadding, "", line.status, statusPadding, "", line.path)
+		if line.isRepoHeader {
+			// Repo header: just the name with icon
+			fmt.Printf("%s\n", line.label)
 		} else {
-			fmt.Printf("%s%*s%s\n", line.label, labelPadding, "", line.path)
+			// Worktree: branch + status on first line, path indented below
+			if line.status != "" {
+				fmt.Printf("%s   %s\n", line.label, line.status)
+			} else {
+				fmt.Printf("%s\n", line.label)
+			}
+			fmt.Printf("     %s\n", line.path)
+			fmt.Println() // Blank line after each worktree
 		}
 	}
 }
@@ -528,24 +545,4 @@ func buildStatusEmojis(status git.WorktreeStatus) string {
 		result += emoji
 	}
 	return result
-}
-
-// visualWidth calculates the display width of a string, accounting for ANSI codes and emojis.
-func visualWidth(s string) int {
-	width := 0
-	inAnsi := false
-	for _, r := range s {
-		if r == '\033' {
-			inAnsi = true
-		} else if inAnsi && r == 'm' {
-			inAnsi = false
-		} else if !inAnsi {
-			if r > 127 {
-				width += 2 // Emoji/unicode
-			} else {
-				width += 1
-			}
-		}
-	}
-	return width
 }
