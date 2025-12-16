@@ -68,6 +68,11 @@ Clean worktrees show no indicators.`,
 
 		sproutWorktrees = filterExistingWorktrees(sproutWorktrees)
 
+		if len(sproutWorktrees) == 0 {
+			fmt.Println("\nNo sprout worktrees found for this repository.")
+			return
+		}
+
 		// Add spacing from prompt
 		fmt.Println()
 
