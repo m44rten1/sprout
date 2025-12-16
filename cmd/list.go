@@ -71,11 +71,6 @@ Clean worktrees show no indicators.`,
 		// Add spacing from prompt
 		fmt.Println()
 
-		// Print repo header
-		repoName := filepath.Base(mainWorktree.Path)
-		fmt.Printf("📦 \033[1m%s\033[0m\n", repoName)
-		fmt.Println()
-
 		// Collect output lines with styling
 		type outputLine struct {
 			label  string
