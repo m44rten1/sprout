@@ -145,7 +145,7 @@ func PrintUntrustedMessageWithConfig(repoRoot string, cfg *config.Config) {
 	fmt.Println()
 	fmt.Println("   Or, to create the worktree without running hooks:")
 	fmt.Println()
-	fmt.Println("       sprout add <branch> --skip-hooks")
+	fmt.Println("       sprout add <branch> --no-hooks")
 	fmt.Println()
 }
 

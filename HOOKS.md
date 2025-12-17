@@ -70,7 +70,7 @@ Runs automatically after creating a new worktree. Ideal for:
 - Generating code or assets
 
 **Triggered by:**
-- `sprout add <branch>` (automatic, unless `--skip-hooks` is used)
+- `sprout add <branch>` (automatic, unless `--no-hooks` is used)
 
 #### `on_open`
 
@@ -144,7 +144,7 @@ Your editor opens immediately, then hooks run in the terminal. This allows you t
 
 **Skip running hooks:**
 ```bash
-sprout add feat/new-feature --skip-hooks
+sprout add feat/new-feature --no-hooks
 ```
 
 Create the worktree without running hooks, even if `.sprout.yml` exists.
@@ -300,7 +300,7 @@ This copies the `.env` file from your repository root to each new worktree. Usef
 2. Trust the repository: `sprout trust`
 3. Verify `.sprout.yml` exists in repo root
 4. Check YAML syntax is valid
-5. Ensure you're not using `--skip-hooks` flag
+5. Ensure you're not using `--no-hooks` flag
 
 ### Command Fails
 

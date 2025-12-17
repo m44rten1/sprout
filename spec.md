@@ -133,7 +133,7 @@ If hooks are defined but the repo is not trusted, sprout displays an error messa
 - Commands run sequentially via `sh -lc "<command>"`
 - If a command fails, subsequent commands are skipped
 - Editor opens immediately, then hooks run in the terminal (allows working while hooks execute)
-- Can be skipped with `--skip-hooks` (for `add`) or `--no-hooks` (for `open`)
+- Can be skipped with `--no-hooks`
 
 ### Environment Variables
 
@@ -189,10 +189,10 @@ worktree-path  = <worktree-root>/<branch>/<repo-slug>
 ```
 
 2. Check for `.sprout.yml` with `on_create` hooks:
-   - If hooks exist and `--skip-hooks` not set:
+   - If hooks exist and `--no-hooks` not set:
      - Verify repository is trusted (see `sprout trust`)
      - If not trusted, show helpful error message and exit
-   - If hooks exist and `--skip-hooks` is set, skip hook execution
+   - If hooks exist and `--no-hooks` is set, skip hook execution
 
 3. Check if worktree already exists:
    - If it exists, open it in the editor
@@ -215,7 +215,7 @@ worktree-path  = <worktree-root>/<branch>/<repo-slug>
    - Open the worktree in an editor after creation
 
 **Flags:**
-- `--skip-hooks`: Skip running `on_create` hooks even if `.sprout.yml` exists
+- `--no-hooks`: Skip running `on_create` hooks even if `.sprout.yml` exists
 - `--no-open`: Skip opening the worktree in an editor
 
 **Notes:**
@@ -466,7 +466,7 @@ Hooks run automatically when:
   - sprout add           (runs on_create)
   - sprout open          (runs on_open)
 
-Use --skip-hooks or --no-hooks flags to skip automatic execution.
+Use --no-hooks flag to skip automatic execution.
 ```
 
 ⸻

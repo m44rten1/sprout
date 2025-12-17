@@ -124,7 +124,7 @@ var hooksCmd = &cobra.Command{
 				fmt.Println("  - sprout open          (runs on_open)")
 			}
 			fmt.Println()
-			fmt.Println("Use --skip-hooks or --no-hooks flags to skip automatic execution.")
+			fmt.Println("Use --no-hooks flag to skip automatic execution.")
 			fmt.Println()
 		}
 	},

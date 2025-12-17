@@ -52,7 +52,7 @@ If you have a `.sprout.yml` file with `on_create` hooks, they'll run automatical
 
 **Skip hooks:**
 ```bash
-sprout add feat/amazing-stuff --skip-hooks
+sprout add feat/amazing-stuff --no-hooks
 ```
 Create the worktree without running hooks, even if `.sprout.yml` exists.
 
@@ -180,7 +180,7 @@ sprout add feat/new-feature
 
 **Create worktree without running hooks:**
 ```bash
-sprout add feat/quick-fix --skip-hooks
+sprout add feat/quick-fix --no-hooks
 # Worktree created, no hooks run
 ```
 
