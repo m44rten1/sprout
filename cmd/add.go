@@ -17,7 +17,7 @@ import (
 
 var (
 	addNoHooksFlag bool
-	noOpenFlag     bool
+	addNoOpenFlag  bool
 )
 
 var addCmd = &cobra.Command{
@@ -248,7 +248,7 @@ var addCmd = &cobra.Command{
 
 		// Open editor first if not disabled and hooks will run
 		// This allows user to start browsing code while hooks run in terminal
-		if !noOpenFlag && shouldRunHooks {
+		if !addNoOpenFlag && shouldRunHooks {
 			if err := editor.Open(worktreePath); err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to open editor: %v\n", err)
 			}
@@ -267,7 +267,7 @@ var addCmd = &cobra.Command{
 		}
 
 		// Open editor after everything if hooks didn't run and --no-open wasn't set
-		if !shouldRunHooks && !noOpenFlag {
+		if !shouldRunHooks && !addNoOpenFlag {
 			if err := editor.Open(worktreePath); err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to open editor: %v\n", err)
 			}
@@ -278,5 +278,5 @@ var addCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(addCmd)
 	addCmd.Flags().BoolVar(&addNoHooksFlag, "no-hooks", false, "Skip running on_create hooks even if .sprout.yml exists")
-	addCmd.Flags().BoolVar(&noOpenFlag, "no-open", false, "Skip opening the worktree in an editor")
+	addCmd.Flags().BoolVar(&addNoOpenFlag, "no-open", false, "Skip opening the worktree in an editor")
 }
