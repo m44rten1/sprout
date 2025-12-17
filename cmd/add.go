@@ -152,7 +152,6 @@ var addCmd = &cobra.Command{
 		// Check if worktree already exists
 		if _, err := os.Stat(worktreePath); err == nil {
 			fmt.Printf("Worktree already exists at %s\n", worktreePath)
-			// TODO: Offer to open it
 			if err := editor.Open(worktreePath); err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to open editor: %v\n", err)
 			}
