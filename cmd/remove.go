@@ -112,12 +112,12 @@ var removeCmd = &cobra.Command{
 				break
 			}
 		}
-	if !isSproutWorktree {
-		fmt.Fprintf(os.Stderr, "Refusing to remove non-sprout worktree: %s\n", targetPath)
-		os.Exit(1)
-	}
+		if !isSproutWorktree {
+			fmt.Fprintf(os.Stderr, "Refusing to remove non-sprout worktree: %s\n", targetPath)
+			os.Exit(1)
+		}
 
-	force, _ := cmd.Flags().GetBool("force")
+		force, _ := cmd.Flags().GetBool("force")
 
 		if err := git.RemoveWorktree(repoRoot, targetPath, force); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to remove worktree: %v\n", err)

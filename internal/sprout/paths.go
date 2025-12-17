@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // GetSproutRoot returns the root directory for sprout worktrees.
@@ -62,10 +63,45 @@ func GetWorktreeRoot(repoPath string) (string, error) {
 // This now includes nesting the worktree inside a folder named after the repo.
 // Format: ~/.sprout/<repo-slug>-<repo-id>/<branch>/<repo-slug>/
 func GetWorktreePath(repoPath, branch string) (string, error) {
+	// Validate branch name to prevent path traversal attacks
+	if err := validateBranchName(branch); err != nil {
+		return "", err
+	}
+
 	root, err := GetWorktreeRoot(repoPath)
 	if err != nil {
 		return "", err
 	}
 	repoSlug := filepath.Base(repoPath)
 	return filepath.Join(root, branch, repoSlug), nil
+}
+
+// validateBranchName checks if a branch name contains dangerous path components
+// that could allow escaping the sprout root directory.
+func validateBranchName(branch string) error {
+	if branch == "" {
+		return fmt.Errorf("branch name cannot be empty")
+	}
+
+	// Check for absolute paths
+	if filepath.IsAbs(branch) {
+		return fmt.Errorf("branch name cannot be an absolute path: %s", branch)
+	}
+
+	// Normalize to forward slashes for consistent checking across platforms
+	normalized := filepath.ToSlash(branch)
+
+	// Check for path traversal attempts
+	// This catches: "..", "../foo", "foo/..", "foo/../bar", etc.
+	if normalized == ".." ||
+	   normalized == "." ||
+	   normalized == "../" ||
+	   normalized == "./" ||
+	   strings.HasPrefix(normalized, "../") ||
+	   strings.HasSuffix(normalized, "/..") ||
+	   strings.Contains(normalized, "/../") {
+		return fmt.Errorf("branch name cannot contain '..' path components: %s", branch)
+	}
+
+	return nil
 }
