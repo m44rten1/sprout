@@ -174,7 +174,7 @@ func CheckAndPrintUntrusted(repoRoot, mainWorktreePath string) (bool, error) {
 		return false, nil
 	}
 
-	trusted, err := trust.IsRepoTrusted(repoRoot)
+	trusted, err := trust.IsRepoTrusted(mainWorktreePath)
 	if err != nil {
 		return false, err
 	}
