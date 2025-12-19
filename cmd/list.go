@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/m44rten1/sprout/internal/git"
@@ -21,12 +22,12 @@ var listCmd = &cobra.Command{
 	Long: `List worktrees for the current repository or all repositories.
 
 Status indicators show the git state of each worktree:
-  🔴  Dirty - worktree has uncommitted changes
-  ⬆️   Ahead - worktree has unpushed commits (ahead of remote)
-  ⬇️   Behind - worktree needs to pull (behind remote)
-  🔀  Unmerged - worktree has commits not in main/master branch
+  ` + "\033[31m✗\033[0m" + `  Dirty - worktree has uncommitted changes
+  ` + "\033[33m↑\033[0m" + `  Ahead - worktree has unpushed commits
+  ` + "\033[36m↓\033[0m" + `  Behind - worktree needs to pull
+  ` + "\033[35m↕\033[0m" + `  Unmerged - worktree has commits not in main/master branch
 
-Multiple indicators can appear together (e.g., 🔴🔀 means dirty and unmerged).
+Multiple indicators can appear together (e.g., ` + "\033[31m✗\033[0m \033[35m↕\033[0m" + ` means dirty and unmerged).
 Clean worktrees show no indicators.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if listAllFlag {
@@ -266,20 +267,21 @@ func printRepos(repos []RepoInfo, showRepoHeaders bool) {
 			if i > 0 {
 				fmt.Println() // Blank line between repos
 			}
-			fmt.Printf("📦 \033[1m%s\033[0m\n\n", repo.Name)
+			fmt.Printf("\033[1m%s\033[0m\n", repo.Name)
 		}
 
-		for _, wt := range repo.Worktrees {
-			printWorktree(wt)
+		for j, wt := range repo.Worktrees {
+			isLast := j == len(repo.Worktrees)-1
+			printWorktree(wt, isLast, showRepoHeaders)
 		}
 	}
 }
 
 // printWorktree prints a single worktree with formatting.
-func printWorktree(wt WorktreeInfo) {
-	icon := "🌱"
+func printWorktree(wt WorktreeInfo, isLast bool, useTreeLines bool) {
+	icon := "🌱 "
 	if wt.IsMain {
-		icon = "🏠"
+		icon = ""
 	}
 
 	branch := wt.Worktree.Branch
@@ -288,16 +290,46 @@ func printWorktree(wt WorktreeInfo) {
 	}
 
 	statusStr := buildStatusEmojis(wt.Status)
-	label := fmt.Sprintf("  %s \033[32m%s\033[0m", icon, branch)
+
+	// Tree line characters
+	branchPrefix := ""
+	pathPrefix := ""
+	if useTreeLines {
+		if isLast {
+			branchPrefix = "└── "
+			pathPrefix = "    "
+		} else {
+			branchPrefix = "├── "
+			pathPrefix = "│   "
+		}
+	}
+
+	label := fmt.Sprintf("%s%s\033[32m%s\033[0m", branchPrefix, icon, branch)
 
 	if statusStr != "" {
-		fmt.Printf("%s   %s\n", label, statusStr)
+		fmt.Printf("%s %s\n", label, statusStr)
 	} else {
 		fmt.Printf("%s\n", label)
 	}
 
-	fmt.Printf("     \033[90m%s\033[0m\n", wt.Worktree.Path)
-	fmt.Println() // Blank line after each worktree
+	if pathPrefix != "" {
+		fmt.Printf("%s \033[90m%s\033[0m\n", pathPrefix, shortenPath(wt.Worktree.Path))
+	} else {
+		fmt.Printf("\033[90m%s\033[0m\n", shortenPath(wt.Worktree.Path))
+	}
+	// fmt.Println() // Blank line after each worktree
+}
+
+// shortenPath replaces the home directory with ~ for shorter display.
+func shortenPath(path string) string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path
+	}
+	if strings.HasPrefix(path, home) {
+		return "~" + strings.TrimPrefix(path, home)
+	}
+	return path
 }
 
 // findFirstWorktree does a shallow scan to find any worktree in the repo directory.
@@ -370,16 +402,16 @@ func filterExistingWorktrees(worktrees []git.Worktree) []git.Worktree {
 func buildStatusEmojis(status git.WorktreeStatus) string {
 	var emojis []string
 	if status.Dirty {
-		emojis = append(emojis, "🔴")
+		emojis = append(emojis, "\033[31m✗\033[0m") // Red - urgent
 	}
 	if status.Ahead > 0 {
-		emojis = append(emojis, "⬆️")
+		emojis = append(emojis, "\033[33m↑\033[0m") // Yellow - warning
 	}
 	if status.Behind > 0 {
-		emojis = append(emojis, "⬇️")
+		emojis = append(emojis, "\033[36m↓\033[0m") // Cyan - informational
 	}
 	if status.Unmerged {
-		emojis = append(emojis, "🔀")
+		emojis = append(emojis, "\033[35m↕\033[0m") // Magenta - special state
 	}
 
 	result := ""
