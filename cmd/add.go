@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/m44rten1/sprout/internal/config"
+	"github.com/m44rten1/sprout/internal/core"
 	"github.com/m44rten1/sprout/internal/editor"
 	"github.com/m44rten1/sprout/internal/git"
 	"github.com/m44rten1/sprout/internal/hooks"
@@ -143,6 +145,10 @@ var addCmd = &cobra.Command{
 			branch = args[0]
 		}
 
+		// Strip remote prefix if user provided it (e.g., "origin/feature" -> "feature")
+		// This prevents issues with branch name construction in git commands
+		branch = strings.TrimPrefix(branch, "origin/")
+
 		worktreePath, err := sprout.GetWorktreePath(mainRepoRoot, branch)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error calculating worktree path: %v\n", err)
@@ -199,44 +205,14 @@ var addCmd = &cobra.Command{
 		// Check if branch exists locally
 		localExists, _ := git.LocalBranchExists(repoRoot, branch)
 
-		// Build git worktree add command.
-		gitArgs := []string{"worktree", "add"}
+		// Check if remote branch exists
+		remoteBranchExists, _ := git.BranchExists(repoRoot, "origin/"+branch)
 
-		// Only new branches should avoid configuring an upstream.
-		if !localExists {
-			gitArgs = append(gitArgs, "--no-track")
-		}
+		// Check if origin/main exists (for new branch creation)
+		hasOriginMain, _ := git.BranchExists(repoRoot, "origin/main")
 
-		gitArgs = append(gitArgs, worktreePath)
-
-		if localExists {
-			// Branch exists locally, just checkout
-			gitArgs = append(gitArgs, branch)
-		} else {
-			// Check if remote branch exists
-			remoteBranch := "origin/" + branch
-			exists, _ := git.BranchExists(repoRoot, remoteBranch)
-
-			if exists {
-				gitArgs = append(gitArgs, "-b", branch, remoteBranch)
-			} else {
-				// Check if origin/main exists
-				if valid, _ := git.BranchExists(repoRoot, "main"); valid {
-					// Check if it's remote or local
-					// Actually BranchExists checks both.
-					// Let's try origin/main first
-					if remoteMain, _ := git.BranchExists(repoRoot, "origin/main"); remoteMain {
-						gitArgs = append(gitArgs, "-b", branch, "origin/main")
-					} else {
-						// Fallback to local main or HEAD
-						gitArgs = append(gitArgs, "-b", branch, "main")
-					}
-				} else {
-					// Just use HEAD
-					gitArgs = append(gitArgs, "-b", branch)
-				}
-			}
-		}
+		// Build git worktree add command using pure function
+		gitArgs := core.WorktreeAddArgs(worktreePath, branch, localExists, remoteBranchExists, hasOriginMain)
 
 		if _, err := git.RunGitCommand(repoRoot, gitArgs...); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to create worktree: %v\n", err)
