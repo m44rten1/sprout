@@ -126,6 +126,9 @@ type Branch struct {
 	RefName string
 	// DisplayName is the name to show in UI (remote branches without "origin/" prefix)
 	DisplayName string
+	// Name is the canonical local branch name (always without remote prefix)
+	// This matches what worktree.Branch contains and should be used for comparisons.
+	Name string
 	// IsLocal indicates whether this is a local branch
 	IsLocal bool
 }
@@ -154,10 +157,15 @@ func ListAllBranches(repoRoot string) ([]Branch, error) {
 		if strings.HasPrefix(line, "remotes/origin/") || strings.HasPrefix(line, "origin/") {
 			continue
 		}
+		// Skip bare remote names (git quirk - shouldn't appear but sometimes does)
+		if line == "origin" || line == "upstream" {
+			continue
+		}
 		localBranchNames[line] = true
 		branches = append(branches, Branch{
 			RefName:     line,
 			DisplayName: line,
+			Name:        line,
 			IsLocal:     true,
 		})
 	}
@@ -192,6 +200,7 @@ func ListAllBranches(repoRoot string) ([]Branch, error) {
 		branches = append(branches, Branch{
 			RefName:     "origin/" + remoteBranch,
 			DisplayName: remoteBranch,
+			Name:        remoteBranch,
 			IsLocal:     false,
 		})
 	}

@@ -9,7 +9,10 @@ import (
 
 // MakeBranch creates a Branch for testing
 func MakeBranch(name string) git.Branch {
-	return git.Branch{DisplayName: name}
+	return git.Branch{
+		DisplayName: name,
+		Name:        name,
+	}
 }
 
 // MakeWorktree creates a Worktree for testing

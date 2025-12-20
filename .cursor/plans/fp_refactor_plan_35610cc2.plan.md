@@ -115,19 +115,32 @@ graph TB
 - Go prefers concise doc comments over structured JavaDoc-style
 - Guard clauses (early returns) are more readable than nested if/else
 
-### Step 1.3: Extract branch filtering logic
+### Step 1.3: Extract branch filtering logic ✅
 
-- In [`internal/core/branches.go`](internal/core/branches.go), extract:
-  ```go
-                func FilterAvailableBranches(allBranches []git.Branch, checkedOut map[string]bool) []git.Branch
-  ```
+- ✅ Created [`internal/core/branches.go`](internal/core/branches.go) with `GetWorktreeAvailableBranches`
+- ✅ Extracted filtering logic from [`cmd/add.go`](cmd/add.go) lines 100-127
+- ✅ Wrote 7 comprehensive test cases in [`internal/core/branches_test.go`](internal/core/branches_test.go)
+- ✅ Updated [`cmd/add.go`](cmd/add.go) to use pure function
+- ✅ Tests passing, code compiles
 
+**Decisions made:**
 
+- Named function `GetWorktreeAvailableBranches` (not `FilterAvailableBranches`) - clear domain context
+- Function takes `worktrees []git.Worktree` directly (not pre-built map) - better encapsulation
+- Added canonical `Branch.Name` field for robust comparison with `Worktree.Branch`
+- Fixed upstream bug: filter "origin" remote name in `git.ListAllBranches()` where parsing happens
+- Used `map[string]struct{}` for set (idiomatic Go, not `map[string]bool`)
+- Preallocated slices for performance
+- Added defensive empty name check
+- Documented detached HEAD policy (non-obvious business rule)
 
+**Key learnings:**
 
-- Extract from [`cmd/add.go`](cmd/add.go) lines 113-125
-- Write tests for edge cases (no branches, all checked out, etc.)
-- Update [`cmd/add.go`](cmd/add.go) to use pure function
+- Fix data quality issues upstream (in parser), not downstream (in business logic)
+- Canonical fields (`Name`) prevent string formatting fragility
+- "Available" is vague - `GetWorktreeAvailableBranches` is clear
+- Code reviews caught: separation of concerns issue, comparison key fragility, over-commenting
+- Iterative refinement through code review improved from 44 lines to 28 lines of clean code
 
 ### Step 1.4: Extract worktree selection logic
 
@@ -161,12 +174,12 @@ graph TB
                     CheckTrust
                     SelectInteractive
                 )
-  
+
                 type Action struct {
                     Type ActionType
                     Data map[string]any // Use any for flexibility
                 }
-  
+
                 type Plan struct {
                     Actions []Action
                 }
@@ -188,25 +201,25 @@ graph TB
                     ListWorktrees(repoRoot string) ([]git.Worktree, error)
                     ListBranches(repoRoot string) ([]git.Branch, error)
                     RunGitCommand(dir string, args ...string) (string, error)
-  
+
                     // File system
                     FileExists(path string) bool
                     CreateDir(path string, perm os.FileMode) error
-  
+
                     // Config
                     LoadConfig(currentPath, mainPath string) (*config.Config, error)
-  
+
                     // Trust
                     IsTrusted(repoRoot string) (bool, error)
                     TrustRepo(repoRoot string) error
-  
+
                     // Editor
                     OpenEditor(path string) error
-  
+
                     // Output
                     Print(msg string)
                     PrintErr(msg string)
-  
+
                     // Interactive (kept at edge)
                     SelectOne(items any, displayFunc any) (int, error)
                 }
@@ -255,7 +268,7 @@ graph TB
                     RepoRoot string
                     AlreadyTrusted bool
                 }
-  
+
                 func PlanTrustCommand(ctx TrustContext) Plan {
                     if ctx.AlreadyTrusted {
                         return Plan{Actions: []Action{
@@ -286,7 +299,7 @@ graph TB
                     }
                     return nil
                 }
-  
+
                 func executeAction(action Action, fx Effects) error {
                     switch action.Type {
                     case PrintMessage:
@@ -340,27 +353,27 @@ graph TB
                     NoHooks bool
                     NoOpen bool
                 }
-  
+
                 func PlanAddCommand(ctx AddContext) (Plan, error) {
                     // Validation
                     if err := sprout.ValidateBranchName(ctx.Branch); err != nil {
                         return Plan{}, err
                     }
-  
+
                     // If exists, just open
                     if ctx.WorktreeExists {
                         return Plan{Actions: []Action{
                             {Type: OpenEditor, Data: map[string]any{"path": ctx.WorktreePath}},
                         }}, nil
                     }
-  
+
                     // Check trust requirements
                     if ctx.Config.HasCreateHooks() && !ctx.NoHooks && !ctx.IsTrusted {
                         return Plan{Actions: []Action{
                             {Type: PrintError, Data: map[string]any{"msg": "Repository not trusted"}},
                         }}, fmt.Errorf("untrusted")
                     }
-  
+
                     // Build action sequence
                     actions := []Action{
                         {Type: CreateDirectory, Data: map[string]any{
@@ -373,7 +386,7 @@ graph TB
                                                                    ctx.RemoteBranchExists, true),
                         }},
                     }
-  
+
                     // Hooks and editor logic
                     shouldRunHooks := ctx.Config.HasCreateHooks() && !ctx.NoHooks
                     if shouldRunHooks {
@@ -390,7 +403,7 @@ graph TB
                             Action{Type: OpenEditor, Data: map[string]any{"path": ctx.WorktreePath}},
                         )
                     }
-  
+
                     return Plan{Actions: actions}, nil
                 }
   ```
