@@ -5,9 +5,11 @@ import (
 	"os"
 
 	"github.com/m44rten1/sprout/internal/config"
+	"github.com/m44rten1/sprout/internal/core"
 	"github.com/m44rten1/sprout/internal/editor"
 	"github.com/m44rten1/sprout/internal/git"
 	"github.com/m44rten1/sprout/internal/hooks"
+	"github.com/m44rten1/sprout/internal/sprout"
 	"github.com/m44rten1/sprout/internal/tui"
 
 	"github.com/spf13/cobra"
@@ -38,7 +40,11 @@ var openCmd = &cobra.Command{
 		}
 
 		// Filter to sprout worktrees
-		choices := filterSproutWorktreesAllRoots(worktrees)
+		sproutRoot, err := sprout.GetSproutRoot()
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		choices := core.FilterSproutWorktrees(worktrees, sproutRoot)
 
 		var completions []string
 		for _, wt := range choices {
@@ -67,7 +73,12 @@ var openCmd = &cobra.Command{
 			}
 
 			// Filter to sprout worktrees
-			choices := filterSproutWorktreesAllRoots(worktrees)
+			sproutRoot, err := sprout.GetSproutRoot()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to get sprout root: %v\n", err)
+				os.Exit(1)
+			}
+			choices := core.FilterSproutWorktrees(worktrees, sproutRoot)
 
 			if len(choices) == 0 {
 				fmt.Println("No sprout-managed worktrees found.")
@@ -102,8 +113,13 @@ var openCmd = &cobra.Command{
 				}
 
 				// Find matching sprout worktree by branch
+				sproutRoot, err := sprout.GetSproutRoot()
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to get sprout root: %v\n", err)
+					os.Exit(1)
+				}
 				var found bool
-				targetPath, found = findWorktreeByBranch(worktrees, arg)
+				targetPath, found = core.FindWorktreeByBranch(worktrees, sproutRoot, arg)
 				if !found {
 					fmt.Fprintf(os.Stderr, "No sprout-managed worktree found for branch '%s'\n", arg)
 					os.Exit(1)

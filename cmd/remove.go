@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/m44rten1/sprout/internal/core"
 	"github.com/m44rten1/sprout/internal/git"
 	"github.com/m44rten1/sprout/internal/sprout"
 	"github.com/m44rten1/sprout/internal/tui"
@@ -32,7 +33,11 @@ var removeCmd = &cobra.Command{
 		}
 
 		// Filter to sprout worktrees
-		choices := filterSproutWorktreesAllRoots(worktrees)
+		sproutRoot, err := sprout.GetSproutRoot()
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		choices := core.FilterSproutWorktrees(worktrees, sproutRoot)
 
 		var completions []string
 		for _, wt := range choices {
@@ -61,7 +66,12 @@ var removeCmd = &cobra.Command{
 			}
 
 			// Filter to sprout worktrees
-			choices := filterSproutWorktreesAllRoots(worktrees)
+			sproutRoot, err := sprout.GetSproutRoot()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to get sprout root: %v\n", err)
+				os.Exit(1)
+			}
+			choices := core.FilterSproutWorktrees(worktrees, sproutRoot)
 
 			if len(choices) == 0 {
 				fmt.Println("No sprout-managed worktrees found.")
@@ -95,8 +105,13 @@ var removeCmd = &cobra.Command{
 				}
 
 				// Find matching sprout worktree by branch
+				sproutRoot, err := sprout.GetSproutRoot()
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to get sprout root: %v\n", err)
+					os.Exit(1)
+				}
 				var found bool
-				targetPath, found = findWorktreeByBranch(worktrees, arg)
+				targetPath, found = core.FindWorktreeByBranch(worktrees, sproutRoot, arg)
 				if !found {
 					fmt.Fprintf(os.Stderr, "No sprout-managed worktree found for branch '%s'\n", arg)
 					os.Exit(1)
@@ -105,14 +120,12 @@ var removeCmd = &cobra.Command{
 		}
 
 		// Verify the target is under a sprout root
-		isSproutWorktree := false
-		for _, sproutRoot := range sprout.GetAllPossibleSproutRoots() {
-			if isUnderSproutRoot(targetPath, sproutRoot) {
-				isSproutWorktree = true
-				break
-			}
+		sproutRoot, err := sprout.GetSproutRoot()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to get sprout root: %v\n", err)
+			os.Exit(1)
 		}
-		if !isSproutWorktree {
+		if !core.IsUnderSproutRoot(targetPath, sproutRoot) {
 			fmt.Fprintf(os.Stderr, "Refusing to remove non-sprout worktree: %s\n", targetPath)
 			os.Exit(1)
 		}

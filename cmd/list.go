@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/m44rten1/sprout/internal/core"
 	"github.com/m44rten1/sprout/internal/git"
 	"github.com/m44rten1/sprout/internal/sprout"
 
@@ -100,7 +101,11 @@ func collectCurrentRepo() (RepoInfo, bool, error) {
 	mainWorktree := allWorktrees[0]
 
 	// Filter to only sprout-managed worktrees
-	sproutWorktrees := filterSproutWorktreesAllRoots(allWorktrees[1:])
+	sproutRoot, err := sprout.GetSproutRoot()
+	if err != nil {
+		return RepoInfo{}, false, fmt.Errorf("failed to get sprout root: %w", err)
+	}
+	sproutWorktrees := core.FilterSproutWorktrees(allWorktrees[1:], sproutRoot)
 	sproutWorktrees = filterExistingWorktrees(sproutWorktrees)
 
 	if len(sproutWorktrees) == 0 {
@@ -132,25 +137,26 @@ func collectAllRepos() ([]RepoInfo, error) {
 	return repos, nil
 }
 
-// findAllRepoDirectories scans all sprout roots for repository directories.
+// findAllRepoDirectories scans the sprout root for repository directories.
 func findAllRepoDirectories() []string {
-	sproutRoots := sprout.GetAllPossibleSproutRoots()
+	sproutRoot, err := sprout.GetSproutRoot()
+	if err != nil {
+		return nil
+	}
+
 	var repoDirs []string
+	if _, err := os.Stat(sproutRoot); os.IsNotExist(err) {
+		return nil
+	}
 
-	for _, sproutRoot := range sproutRoots {
-		if _, err := os.Stat(sproutRoot); os.IsNotExist(err) {
-			continue
-		}
+	entries, err := os.ReadDir(sproutRoot)
+	if err != nil {
+		return nil
+	}
 
-		entries, err := os.ReadDir(sproutRoot)
-		if err != nil {
-			continue
-		}
-
-		for _, entry := range entries {
-			if entry.IsDir() {
-				repoDirs = append(repoDirs, filepath.Join(sproutRoot, entry.Name()))
-			}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			repoDirs = append(repoDirs, filepath.Join(sproutRoot, entry.Name()))
 		}
 	}
 
@@ -203,7 +209,11 @@ func processRepoDirectory(repoDir string) (RepoInfo, bool) {
 	mainWorktree := allWorktrees[0]
 
 	// Filter to only sprout-managed worktrees
-	sproutWorktrees := filterSproutWorktreesAllRoots(allWorktrees[1:])
+	sproutRoot, err := sprout.GetSproutRoot()
+	if err != nil {
+		return RepoInfo{}, false
+	}
+	sproutWorktrees := core.FilterSproutWorktrees(allWorktrees[1:], sproutRoot)
 	sproutWorktrees = filterExistingWorktrees(sproutWorktrees)
 
 	if len(sproutWorktrees) == 0 {
