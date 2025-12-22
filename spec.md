@@ -21,12 +21,11 @@ sprout's main goals:
 sprout never creates worktrees as siblings of the main repo.
 Instead, all worktrees live under a central root directory.
 
-**Supported locations (in order of preference):**
-- `$XDG_DATA_HOME/sprout` (if `$XDG_DATA_HOME` is set)
-- `$HOME/.local/share/sprout` (XDG-compliant default)
-- `$HOME/.sprout` (legacy location, still supported for backward compatibility)
+**Sprout root location:**
+- `$XDG_DATA_HOME/sprout` (if the `$XDG_DATA_HOME` environment variable is set)
+- `$HOME/.local/share/sprout` (default, XDG-compliant)
 
-sprout will use the first available location when creating new worktrees. All locations are scanned when discovering existing worktrees (e.g., in `sprout list --all`).
+sprout follows the XDG Base Directory specification, checking `$XDG_DATA_HOME` first, then falling back to the standard `~/.local/share/sprout` location.
 
 Within the sprout root, worktrees are grouped by repository identity:
 
@@ -374,7 +373,7 @@ feature/new-feature        /Users/you/.sprout/repo-a1b2c3d4/feature/new-feature/
 
 **Notes:**
 - Only shows worktrees that actually exist on the filesystem
-- Scans all possible sprout root locations (`~/.sprout`, `~/.local/share/sprout`, `$XDG_DATA_HOME/sprout`)
+- Scans the sprout root directory (`$XDG_DATA_HOME/sprout` or `~/.local/share/sprout`)
 - Main worktree is intentionally excluded from the list
 - Handles stale git metadata gracefully by scanning filesystem directly
 - Multiple status indicators can appear together (e.g., 🔴🔀)
@@ -499,10 +498,9 @@ sprout repair --prune
 
 **Discovery:**
 
-The command scans all possible sprout root locations:
+The command scans the sprout root directory:
 - `$XDG_DATA_HOME/sprout` (if `$XDG_DATA_HOME` is set)
-- `~/.local/share/sprout`
-- `~/.sprout` (for backward compatibility)
+- `~/.local/share/sprout` (default)
 
 For each directory found, it walks the filesystem to discover valid git worktrees and groups them by their main repository.
 

@@ -9,34 +9,18 @@ import (
 )
 
 // GetSproutRoot returns the root directory for sprout worktrees.
-// Respects XDG_DATA_HOME, falling back to ~/.local/share/sprout
+// Uses $XDG_DATA_HOME/sprout if XDG_DATA_HOME is set, otherwise ~/.local/share/sprout
 func GetSproutRoot() (string, error) {
-	roots := GetAllPossibleSproutRoots()
-	if len(roots) == 0 {
-		return "", fmt.Errorf("failed to get user home directory")
-	}
-	return roots[0], nil
-}
-
-// GetAllPossibleSproutRoots returns all possible sprout root directories,
-// including legacy locations for backward compatibility.
-// Order: XDG_DATA_HOME/sprout, ~/.local/share/sprout, ~/.sprout (legacy)
-func GetAllPossibleSproutRoots() []string {
-	var roots []string
-
-	// Add XDG_DATA_HOME location if set
 	if xdgData := os.Getenv("XDG_DATA_HOME"); xdgData != "" {
-		roots = append(roots, filepath.Join(xdgData, "sprout"))
+		return filepath.Join(xdgData, "sprout"), nil
 	}
 
-	// Add ~/.local/share/sprout and legacy ~/.sprout
-	if home, err := os.UserHomeDir(); err == nil {
-		roots = append(roots, filepath.Join(home, ".local", "share", "sprout"))
-		// Add ~/.sprout for backward compatibility
-		roots = append(roots, filepath.Join(home, ".sprout"))
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get user home directory: %w", err)
 	}
 
-	return roots
+	return filepath.Join(home, ".local", "share", "sprout"), nil
 }
 
 // GetRepoID computes a stable identifier for a repository based on its absolute path.
@@ -94,12 +78,12 @@ func validateBranchName(branch string) error {
 	// Check for path traversal attempts
 	// This catches: "..", "../foo", "foo/..", "foo/../bar", etc.
 	if normalized == ".." ||
-	   normalized == "." ||
-	   normalized == "../" ||
-	   normalized == "./" ||
-	   strings.HasPrefix(normalized, "../") ||
-	   strings.HasSuffix(normalized, "/..") ||
-	   strings.Contains(normalized, "/../") {
+		normalized == "." ||
+		normalized == "../" ||
+		normalized == "./" ||
+		strings.HasPrefix(normalized, "../") ||
+		strings.HasSuffix(normalized, "/..") ||
+		strings.Contains(normalized, "/../") {
 		return fmt.Errorf("branch name cannot contain '..' path components: %s", branch)
 	}
 
