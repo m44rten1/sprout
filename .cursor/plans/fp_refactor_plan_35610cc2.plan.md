@@ -7,7 +7,7 @@ todos:
     status: completed
   - id: phase2-infrastructure
     content: Create Action/Plan types and Effects interface
-    status: in_progress
+    status: completed
     dependencies:
       - phase1-foundation
   - id: phase3-trust
@@ -310,21 +310,51 @@ graph TB
 - Reduced doc comment noise on simple delegation methods
 - Clarified that `ListBranches` → `git.ListAllBranches` returns both local+remote (intentional)
 
-### Step 2.4: Implement TestEffects
+### Step 2.4: Implement TestEffects ✅
 
-- Create [`internal/effects/test.go`](internal/effects/test.go)
-- Create mock implementation that stores calls and returns predefined values:
-  ```go
-                              type TestEffects struct {
-                                  RepoRoot string
-                                  Worktrees []git.Worktree
-                                  Config *config.Config
-                                  TrustedRepos map[string]bool
-                                  Calls []string // Track what was called
-                              }
-  ```
+- ✅ Created [`internal/effects/testeffects.go`](internal/effects/testeffects.go)
+- ✅ Created mock implementation that stores calls and returns predefined values
+- ✅ Created [`internal/effects/testeffects_test.go`](internal/effects/testeffects_test.go) with usage examples
+- ✅ All 4 test cases passing
 
-- This enables testing without real git/filesystem
+**Implementation details:**
+
+- `TestEffects` struct tracks:
+  - **Predefined values**: `RepoRoot`, `Worktrees`, `Branches`, `Config`, `TrustedRepos`, `Files`, `GitCommandOutput`
+  - **Structured counters**: `GetRepoRootCalls`, `RunGitCommandCalls`, etc. (one per method)
+  - **Captured side effects**: `PrintedMsgs`, `PrintedErrs`, `GitCommands` (with `GitCmd{Dir, Args}`), `OpenedPaths`, `CreatedDirs`, `TrustedRepos_Calls`
+  - **Interactive results**: `SelectedBranchIndex`, `SelectedWorktreeIndex`, `SelectionError`
+- `NewTestEffects()` constructor provides sensible defaults (empty slices/maps, `/test/repo` root)
+- `GitCmd` struct records both directory and args for git commands
+
+**Decisions made:**
+
+- **Structured tracking, not strings**: Use integer counters (`GetRepoRootCalls`) instead of `Calls []string` with parsing
+- **GitCommand key includes directory**: `dir + "\n" + args` prevents bugs when same command runs in different dirs
+- `MkdirAll` automatically marks directory as existing in `Files` map (realistic behavior)
+- `TrustRepo` updates `TrustedRepos` map so subsequent `IsTrusted` calls work correctly
+- Selection methods validate bounds including negative indices (prevent test bugs)
+- Empty `RepoRoot` triggers error in `GetRepoRoot` (simulates "not a git repo")
+- All methods have zero side effects on real filesystem/git - pure in-memory mocking
+- Named `testeffects.go` (not `test.go`) - more idiomatic Go convention
+
+**Code review feedback applied:**
+
+1. ✅ Eliminated "stringly typed" call tracking - use structured counters instead
+2. ✅ Fixed `RunGitCommand` key to include `dir` - prevents same-args-different-dirs bug
+3. ✅ Renamed file to `testeffects.go` - clearer than `test.go`
+4. ✅ Added negative index validation in selection methods
+5. ✅ Created `GitCmd` struct for better command recording (not just `[]string`)
+6. ✅ Renamed `TrustedRepos_Calls` → `TrustRepoRepos` (more idiomatic Go)
+7. ✅ Added argument capture for methods: `ListWorktreesArgs`, `ListBranchesArgs`, `LoadConfigCurrentArgs`, `LoadConfigMainArgs`, `IsTrustedArgs`
+8. ✅ Fixed slice aliasing bug in `RunGitCommand` - copies `args` to prevent mutations
+
+**Test coverage:**
+
+- ✅ Basic method calls and structured counter assertions
+- ✅ Git command recording with directory tracking
+- ✅ State mutations (TrustRepo → IsTrusted flow)
+- ✅ Selection validation (negative and out-of-bounds indices)
 
 ## Phase 3: First Command Refactor - trust (Week 2)
 
