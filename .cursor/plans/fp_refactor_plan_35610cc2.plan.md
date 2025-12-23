@@ -67,8 +67,6 @@ graph TB
     Effects --> imperativeShell
 ```
 
-
-
 ## Phase 1: Foundation - Extract Pure Functions (Week 1)
 
 ### Step 1.1: Create test infrastructure ✅
@@ -193,32 +191,30 @@ graph TB
 **Original plan reference:**
 
 - Create [`internal/core/actions.go`](internal/core/actions.go):
+
   ```go
-                                type ActionType int
-                                const (
-                                    NoOp ActionType = iota
-                                    PrintMessage
-                                    PrintError
-                                    CreateDirectory
-                                    RunGitCommand
-                                    OpenEditor
-                                    RunHooks
-                                    CheckTrust
-                                    SelectInteractive
-                                )
-  
-                                type Action struct {
-                                    Type ActionType
-                                    Data map[string]any // Use any for flexibility
-                                }
-  
-                                type Plan struct {
-                                    Actions []Action
-                                }
+                                  type ActionType int
+                                  const (
+                                      NoOp ActionType = iota
+                                      PrintMessage
+                                      PrintError
+                                      CreateDirectory
+                                      RunGitCommand
+                                      OpenEditor
+                                      RunHooks
+                                      CheckTrust
+                                      SelectInteractive
+                                  )
+
+                                  type Action struct {
+                                      Type ActionType
+                                      Data map[string]any // Use any for flexibility
+                                  }
+
+                                  type Plan struct {
+                                      Actions []Action
+                                  }
   ```
-
-
-
 
 - Keep it minimal - we'll expand as needed
 
@@ -249,40 +245,38 @@ graph TB
 **Original plan reference:**
 
 - Create [`internal/effects/effects.go`](internal/effects/effects.go):
+
   ```go
-                                type Effects interface {
-                                    // Git operations
-                                    GetRepoRoot() (string, error)
-                                    GetMainWorktreePath() (string, error)
-                                    ListWorktrees(repoRoot string) ([]git.Worktree, error)
-                                    ListBranches(repoRoot string) ([]git.Branch, error)
-                                    RunGitCommand(dir string, args ...string) (string, error)
-  
-                                    // File system
-                                    FileExists(path string) bool
-                                    CreateDir(path string, perm os.FileMode) error
-  
-                                    // Config
-                                    LoadConfig(currentPath, mainPath string) (*config.Config, error)
-  
-                                    // Trust
-                                    IsTrusted(repoRoot string) (bool, error)
-                                    TrustRepo(repoRoot string) error
-  
-                                    // Editor
-                                    OpenEditor(path string) error
-  
-                                    // Output
-                                    Print(msg string)
-                                    PrintErr(msg string)
-  
-                                    // Interactive (kept at edge)
-                                    SelectOne(items any, displayFunc any) (int, error)
-                                }
+                                  type Effects interface {
+                                      // Git operations
+                                      GetRepoRoot() (string, error)
+                                      GetMainWorktreePath() (string, error)
+                                      ListWorktrees(repoRoot string) ([]git.Worktree, error)
+                                      ListBranches(repoRoot string) ([]git.Branch, error)
+                                      RunGitCommand(dir string, args ...string) (string, error)
+
+                                      // File system
+                                      FileExists(path string) bool
+                                      CreateDir(path string, perm os.FileMode) error
+
+                                      // Config
+                                      LoadConfig(currentPath, mainPath string) (*config.Config, error)
+
+                                      // Trust
+                                      IsTrusted(repoRoot string) (bool, error)
+                                      TrustRepo(repoRoot string) error
+
+                                      // Editor
+                                      OpenEditor(path string) error
+
+                                      // Output
+                                      Print(msg string)
+                                      PrintErr(msg string)
+
+                                      // Interactive (kept at edge)
+                                      SelectOne(items any, displayFunc any) (int, error)
+                                  }
   ```
-
-
-
 
 ### Step 2.3: Implement RealEffects ✅
 
@@ -365,61 +359,83 @@ graph TB
 
 ## Phase 3: First Command Refactor - trust (Week 2)
 
-### Step 3.1: Create trust command planner
+### Step 3.1: Create trust command planner ✅
 
-- Create [`internal/core/trust.go`](internal/core/trust.go):
-  ```go
-                                type TrustContext struct {
-                                    RepoRoot string
-                                    AlreadyTrusted bool
-                                }
-  
-                                func PlanTrustCommand(ctx TrustContext) Plan {
-                                    if ctx.AlreadyTrusted {
-                                        return Plan{Actions: []Action{
-                                            {Type: PrintMessage, Data: map[string]any{"msg": "Already trusted"}},
-                                        }}
-                                    }
-                                    return Plan{Actions: []Action{
-                                        {Type: CheckTrust, Data: map[string]any{"repo": ctx.RepoRoot}},
-                                        {Type: PrintMessage, Data: map[string]any{"msg": "Repository trusted"}},
-                                    }}
-                                }
-  ```
+- ✅ Created [`internal/core/trust.go`](internal/core/trust.go) with `TrustContext` and `PlanTrustCommand`
+- ✅ Created [`internal/core/trust_test.go`](internal/core/trust_test.go) with tests for both scenarios
+- ✅ Tests passing: `go test ./internal/core/...`
+- ✅ No linter errors
 
+**Implementation details:**
 
+- `TrustContext` contains `RepoRoot` and `AlreadyTrusted` fields
+- `PlanTrustCommand` returns a plan with `PrintMessage` if already trusted
+- If not trusted, returns plan with `TrustRepo` action followed by success message
+- Two test cases: "already trusted" and "not yet trusted"
+- Tests verify correct action types and data payloads
 
+**Decisions made:**
 
-- Write tests for both scenarios
+- Message "Repository already trusted" (not "Already trusted") for clarity
+- Message "Repository trusted" (not "Repository marked as trusted") for conciseness
+- Used `TrustRepo` action type (matches `actions.go` enum)
+- **REFACTORED**: After code review feedback, converted from `map[string]any` to typed sum types
+- Refactored `actions.go` to use interface-based sum types for compile-time safety
+- Added input validation: empty `RepoRoot` returns `PrintError` action
+- Added constants for all messages: `msgRepoAlreadyTrusted`, `msgRepoTrusted`, `errNoRepoRoot`
+- Tests now use type assertions (`action.(PrintMessage)`) instead of map lookups
+- Added third test case: "empty repo root returns error"
+
+**Code review improvements applied:**
+
+1. ✅ Replaced `map[string]any` with typed action structs (eliminates runtime typos like `Data["mgs"]`)
+2. ✅ Each action type is now a struct implementing `Action` interface
+3. ✅ Executor will use type switches instead of `ActionType` enum (cleaner, type-safe)
+4. ✅ Added input validation for empty `RepoRoot`
+5. ✅ Extracted message constants for consistency and testing
+6. ✅ Tests verify exact types, not just `Data` map contents
+7. ✅ Added `Exit{Code int}` action for explicit failure handling
+8. ✅ Error plan now includes both `PrintError` + `Exit{Code: 1}` for clear semantics
+
+**Final action types in `actions.go`:**
+
+- `NoOp`, `PrintMessage`, `PrintError`, `CreateDirectory`, `RunGitCommand`
+- `OpenEditor`, `RunHooks`, `TrustRepo`, `SelectInteractive`, `Exit`
+
+**Benefits:**
+
+- Compiler enforces correctness: `action.Msg` typos = compile errors
+- Tests can assert exit codes explicitly: `Exit{Code: 1}` in plan
+- Refactor-safe: rename `Msg` → `Message` shows all usages
+- IDE autocomplete works perfectly
+- No runtime panics from map key typos or type assertions
 
 ### Step 3.2: Create plan executor
 
 - Create [`internal/effects/executor.go`](internal/effects/executor.go):
+
   ```go
-                                func ExecutePlan(plan Plan, fx Effects) error {
-                                    for _, action := range plan.Actions {
-                                        if err := executeAction(action, fx); err != nil {
-                                            return err
-                                        }
-                                    }
-                                    return nil
-                                }
-  
-                                func executeAction(action Action, fx Effects) error {
-                                    switch action.Type {
-                                    case PrintMessage:
-                                        fx.Print(action.Data["msg"].(string))
-                                    case RunGitCommand:
-                                        _, err := fx.RunGitCommand(action.Data["dir"].(string), action.Data["args"].([]string)...)
-                                        return err
-                                    // ... etc
-                                    }
-                                    return nil
-                                }
+                                  func ExecutePlan(plan Plan, fx Effects) error {
+                                      for _, action := range plan.Actions {
+                                          if err := executeAction(action, fx); err != nil {
+                                              return err
+                                          }
+                                      }
+                                      return nil
+                                  }
+
+                                  func executeAction(action Action, fx Effects) error {
+                                      switch action.Type {
+                                      case PrintMessage:
+                                          fx.Print(action.Data["msg"].(string))
+                                      case RunGitCommand:
+                                          _, err := fx.RunGitCommand(action.Data["dir"].(string), action.Data["args"].([]string)...)
+                                          return err
+                                      // ... etc
+                                      }
+                                      return nil
+                                  }
   ```
-
-
-
 
 ### Step 3.3: Refactor trust command
 
@@ -444,77 +460,75 @@ graph TB
 ### Step 4.1: Create add command planner
 
 - Create [`internal/core/add.go`](internal/core/add.go):
+
   ```go
-                                type AddContext struct {
-                                    Branch string
-                                    RepoRoot string
-                                    MainWorktreePath string
-                                    WorktreePath string
-                                    WorktreeExists bool
-                                    LocalBranchExists bool
-                                    RemoteBranchExists bool
-                                    Config *config.Config
-                                    IsTrusted bool
-                                    NoHooks bool
-                                    NoOpen bool
-                                }
-  
-                                func PlanAddCommand(ctx AddContext) (Plan, error) {
-                                    // Validation
-                                    if err := sprout.ValidateBranchName(ctx.Branch); err != nil {
-                                        return Plan{}, err
-                                    }
-  
-                                    // If exists, just open
-                                    if ctx.WorktreeExists {
-                                        return Plan{Actions: []Action{
-                                            {Type: OpenEditor, Data: map[string]any{"path": ctx.WorktreePath}},
-                                        }}, nil
-                                    }
-  
-                                    // Check trust requirements
-                                    if ctx.Config.HasCreateHooks() && !ctx.NoHooks && !ctx.IsTrusted {
-                                        return Plan{Actions: []Action{
-                                            {Type: PrintError, Data: map[string]any{"msg": "Repository not trusted"}},
-                                        }}, fmt.Errorf("untrusted")
-                                    }
-  
-                                    // Build action sequence
-                                    actions := []Action{
-                                        {Type: CreateDirectory, Data: map[string]any{
-                                            "path": filepath.Dir(ctx.WorktreePath),
-                                            "perm": 0755,
-                                        }},
-                                        {Type: RunGitCommand, Data: map[string]any{
-                                            "dir": ctx.RepoRoot,
-                                            "args": core.BuildWorktreeAddCommand(ctx.Branch, ctx.LocalBranchExists,
-                                                                                   ctx.RemoteBranchExists, true),
-                                        }},
-                                    }
-  
-                                    // Hooks and editor logic
-                                    shouldRunHooks := ctx.Config.HasCreateHooks() && !ctx.NoHooks
-                                    if shouldRunHooks {
-                                        actions = append(actions,
-                                            Action{Type: OpenEditor, Data: map[string]any{"path": ctx.WorktreePath}},
-                                            Action{Type: RunHooks, Data: map[string]any{
-                                                "type": "on_create",
-                                                "commands": ctx.Config.Hooks.OnCreate,
-                                                "path": ctx.WorktreePath,
-                                            }},
-                                        )
-                                    } else if !ctx.NoOpen {
-                                        actions = append(actions,
-                                            Action{Type: OpenEditor, Data: map[string]any{"path": ctx.WorktreePath}},
-                                        )
-                                    }
-  
-                                    return Plan{Actions: actions}, nil
-                                }
+                                  type AddContext struct {
+                                      Branch string
+                                      RepoRoot string
+                                      MainWorktreePath string
+                                      WorktreePath string
+                                      WorktreeExists bool
+                                      LocalBranchExists bool
+                                      RemoteBranchExists bool
+                                      Config *config.Config
+                                      IsTrusted bool
+                                      NoHooks bool
+                                      NoOpen bool
+                                  }
+
+                                  func PlanAddCommand(ctx AddContext) (Plan, error) {
+                                      // Validation
+                                      if err := sprout.ValidateBranchName(ctx.Branch); err != nil {
+                                          return Plan{}, err
+                                      }
+
+                                      // If exists, just open
+                                      if ctx.WorktreeExists {
+                                          return Plan{Actions: []Action{
+                                              {Type: OpenEditor, Data: map[string]any{"path": ctx.WorktreePath}},
+                                          }}, nil
+                                      }
+
+                                      // Check trust requirements
+                                      if ctx.Config.HasCreateHooks() && !ctx.NoHooks && !ctx.IsTrusted {
+                                          return Plan{Actions: []Action{
+                                              {Type: PrintError, Data: map[string]any{"msg": "Repository not trusted"}},
+                                          }}, fmt.Errorf("untrusted")
+                                      }
+
+                                      // Build action sequence
+                                      actions := []Action{
+                                          {Type: CreateDirectory, Data: map[string]any{
+                                              "path": filepath.Dir(ctx.WorktreePath),
+                                              "perm": 0755,
+                                          }},
+                                          {Type: RunGitCommand, Data: map[string]any{
+                                              "dir": ctx.RepoRoot,
+                                              "args": core.BuildWorktreeAddCommand(ctx.Branch, ctx.LocalBranchExists,
+                                                                                     ctx.RemoteBranchExists, true),
+                                          }},
+                                      }
+
+                                      // Hooks and editor logic
+                                      shouldRunHooks := ctx.Config.HasCreateHooks() && !ctx.NoHooks
+                                      if shouldRunHooks {
+                                          actions = append(actions,
+                                              Action{Type: OpenEditor, Data: map[string]any{"path": ctx.WorktreePath}},
+                                              Action{Type: RunHooks, Data: map[string]any{
+                                                  "type": "on_create",
+                                                  "commands": ctx.Config.Hooks.OnCreate,
+                                                  "path": ctx.WorktreePath,
+                                              }},
+                                          )
+                                      } else if !ctx.NoOpen {
+                                          actions = append(actions,
+                                              Action{Type: OpenEditor, Data: map[string]any{"path": ctx.WorktreePath}},
+                                          )
+                                      }
+
+                                      return Plan{Actions: actions}, nil
+                                  }
   ```
-
-
-
 
 ### Step 4.2: Write comprehensive add tests
 
@@ -590,15 +604,13 @@ graph TB
 ### Step 6.2: Improve error handling
 
 - Create [`internal/core/result.go`](internal/core/result.go):
+
   ```go
-                                type Result[T any] struct {
-                                    Value T
-                                    Error error
-                                }
+                                  type Result[T any] struct {
+                                      Value T
+                                      Error error
+                                  }
   ```
-
-
-
 
 - Update planning functions to use Result where it clarifies code
 
@@ -621,4 +633,3 @@ graph TB
 After completion:
 
 - Test coverage should be 70%+ (currently ~5%)
-- Each command should have 8-12 test cases
