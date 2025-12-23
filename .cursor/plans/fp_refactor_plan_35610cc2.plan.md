@@ -525,12 +525,96 @@ graph TB
 - Planner now includes full message formatting (including emojis) for realistic output
 - Tests verify message content using `assert.Contains()` instead of exact string matches (more resilient)
 
-### Step 3.4: Add trust command tests
+### Step 3.4: Add trust command tests ✅ (FINAL)
 
-- Create [`cmd/trust_test.go`](cmd/trust_test.go)
-- Test with TestEffects - no real filesystem needed
-- Verify plan generation is correct
-- Verify execution calls right Effects methods
+- ✅ Created [`cmd/trust_test.go`](cmd/trust_test.go) with 3 test suites (11 total test cases)
+- ✅ Extracted [`BuildTrustContext`](cmd/trust.go) function for testability
+- ✅ Tests use `TestEffects` - no real filesystem or git operations
+- ✅ All tests passing: `go test ./cmd -run "^TestPlan.*Trust|^TestBuild.*Trust|^TestTrust"`
+- ✅ No linter errors
+
+**Code improvements:**
+
+1. **Extracted `BuildTrustContext(fx, pathArg)` function**:
+   - Separated context-building logic from cobra command handler
+   - Now testable without running the full CLI
+   - Uses effects for all I/O (including git repo validation via `fx.RunGitCommand`)
+   - Returns structured errors with proper wrapping
+
+2. **Simplified command handler**:
+   - From 48 lines to 23 lines
+   - Now just: create effects → build context → plan → execute
+   - All business logic extracted to testable functions
+
+**Test suites:**
+
+1. **`TestPlanTrustCommand`** (table-driven, 4 cases):
+   - Tests pure planning logic with pre-built `TrustContext`
+   - Covers: already trusted, not yet trusted, custom path, empty repo root
+   - Uses `require` for must-hold preconditions, `assert` for expectations
+   - Fixed `wantExit bool` + `wantExitCode int` (no more "0 means no exit" footgun)
+   - Verifies both call counts and captured output
+   - Each test validates no contradictory output (e.g., no stdout when printing error)
+   - Added `TrustRepoRepos` assertion for "already trusted" case (catches "called with empty string" bugs)
+   - "trusted" keyword assertion added to success cases (stable UX contract)
+
+2. **`TestPlanTrustCommand_TrustRepoFailure`** (1 case):
+   - Tests error propagation when TrustRepo fails
+   - Uses sentinel error (`errPermissionDenied`) with `assert.ErrorIs()` for root cause preservation
+   - Also validates error wrapping with `assert.Contains()` for context
+   - Verifies partial execution (TrustRepo called, but no success message)
+   - **Contract assertion**: Planner doesn't print errors (returns them), so `PrintErrCalls == 0`
+
+3. **`TestBuildTrustContext`** (table-driven, 5 cases):
+   - **Tests the real handler function** (not TestEffects methods directly)
+   - Covers: current repo (trusted/not), explicit path, GetMainWorktreePath failure, IsTrusted failure
+   - Validates correct effects calls (e.g., no `GetMainWorktreePath` when path is explicit)
+   - Catches wiring bugs that pure planner tests miss
+   - Uses `assertEffects` callback for flexible validation
+   - **Table hygiene**: `wantCtx *core.TrustContext` (nil for error cases) with explicit comments
+   - **Helper function**: `stubGitRepoValid(fx, path)` encapsulates git command format (less brittle)
+
+4. **`TestTrustCommand_EndToEnd`** (1 case):
+   - Full integration: `BuildTrustContext` → `PlanTrustCommand` → `ExecutePlan`
+   - Verifies **behavioral outcomes**, not test bookkeeping:
+     - State transition: repo becomes trusted
+     - TrustRepo action executed with correct path
+     - Success message printed with expected content
+   - **Does NOT assert exact call counts** (e.g., IsTrustedCalls) - those are implementation details
+   - Tests all layers together without becoming brittle
+
+**Decisions made:**
+
+- **Split test boundaries**: Pure planner (no fx setup) vs handler (calls real `BuildTrustContext`)
+- **Table-driven format**: Reduced duplication, easier to add new cases
+- **`require` vs `assert`**: Use `require` for preconditions, `assert` for expectations
+- **Sentinel errors with `ErrorIs`**: Stronger error assertions than just string matching
+- **Extract testable functions**: `BuildTrustContext` makes handler logic testable
+- **No redundant state setup**: Planner tests don't pre-seed `fx.TrustedRepos`
+- **Verify no contradictory output**: Assert `PrintCalls == 0` when testing error paths
+- **Fixed `wantExitCode: 0` footgun**: Now explicit `wantExit bool` + `wantExitCode int`
+- **String fragility acknowledged**: "on_create"/"on_open"/"trusted" are intentional stable UX contract
+- **Git command stubbing encapsulated**: `stubGitRepoValid()` helper prevents magic strings
+- **Table hygiene**: Pointer `wantCtx *core.TrustContext` makes nil intent clear for error cases
+- **End-to-end tests assert behavior, not bookkeeping**: No exact call counts that break on refactors
+
+**Key learnings:**
+
+- Extracting functions from cobra handlers makes them testable without running CLI
+- Testing the real handler function (not reimplementing it) creates faithful spec
+- `ErrorIs` + sentinel errors are stronger than just `Contains` for error checking
+- `wantExit: false` is clearer than `wantExitCode: 0` (avoids ambiguity)
+- Handler tests should call the real functions, not duplicate their logic
+- Using effects for all I/O (including git commands) enables full test coverage
+- **End-to-end tests should verify outcomes (state changes, messages), not call counts**
+- **Helper functions for test setup** (like `stubGitRepoValid`) keep tests maintainable
+- **Explicit error behavior contracts** (e.g., "planner returns errors, doesn't print") prevent confusion
+
+**Final verdict**: Test file is now a layered spec that tells a coherent architecture story:
+- **Pure core** (planner) tested in isolation
+- **Imperative shell** (context builder) tested for correct wiring
+- **Integration** (end-to-end) tested for behavioral outcomes
+- All without brittleness from implementation details
 
 ## Phase 4: Second Command - add (Week 3)
 
