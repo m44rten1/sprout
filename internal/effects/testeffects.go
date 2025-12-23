@@ -23,6 +23,17 @@ type TestEffects struct {
 	GitCommandOutput map[string]string // Key: "dir\nargs..." -> output
 	GitCommandErrors map[string]error  // Key: "dir\nargs..." -> error
 
+	// Error injection - set these to simulate failures
+	GetRepoRootErr         error
+	GetMainWorktreePathErr error
+	ListWorktreesErr       error
+	ListBranchesErr        error
+	MkdirAllErr            error
+	LoadConfigErr          error
+	IsTrustedErr           error
+	TrustRepoErr           error
+	OpenEditorErr          error
+
 	// Interaction results
 	SelectedBranchIndex   int
 	SelectedWorktreeIndex int
@@ -93,6 +104,9 @@ func NewTestEffects() *TestEffects {
 
 func (t *TestEffects) GetRepoRoot() (string, error) {
 	t.GetRepoRootCalls++
+	if t.GetRepoRootErr != nil {
+		return "", t.GetRepoRootErr
+	}
 	if t.RepoRoot == "" {
 		return "", fmt.Errorf("not a git repo")
 	}
@@ -101,6 +115,9 @@ func (t *TestEffects) GetRepoRoot() (string, error) {
 
 func (t *TestEffects) GetMainWorktreePath() (string, error) {
 	t.GetMainWorktreePathCalls++
+	if t.GetMainWorktreePathErr != nil {
+		return "", t.GetMainWorktreePathErr
+	}
 	if t.MainWorktreePath == "" {
 		return "", fmt.Errorf("no worktrees found")
 	}
@@ -110,12 +127,18 @@ func (t *TestEffects) GetMainWorktreePath() (string, error) {
 func (t *TestEffects) ListWorktrees(repoRoot string) ([]git.Worktree, error) {
 	t.ListWorktreesCalls++
 	t.ListWorktreesArgs = append(t.ListWorktreesArgs, repoRoot)
+	if t.ListWorktreesErr != nil {
+		return nil, t.ListWorktreesErr
+	}
 	return t.Worktrees, nil
 }
 
 func (t *TestEffects) ListBranches(repoRoot string) ([]git.Branch, error) {
 	t.ListBranchesCalls++
 	t.ListBranchesArgs = append(t.ListBranchesArgs, repoRoot)
+	if t.ListBranchesErr != nil {
+		return nil, t.ListBranchesErr
+	}
 	return t.Branches, nil
 }
 
@@ -146,6 +169,9 @@ func (t *TestEffects) FileExists(path string) bool {
 func (t *TestEffects) MkdirAll(path string, perm os.FileMode) error {
 	t.MkdirAllCalls++
 	t.CreatedDirs = append(t.CreatedDirs, path)
+	if t.MkdirAllErr != nil {
+		return t.MkdirAllErr
+	}
 	// Automatically mark directory as existing
 	t.Files[path] = true
 	return nil
@@ -155,6 +181,9 @@ func (t *TestEffects) LoadConfig(currentPath, mainPath string) (*config.Config, 
 	t.LoadConfigCalls++
 	t.LoadConfigCurrentArgs = append(t.LoadConfigCurrentArgs, currentPath)
 	t.LoadConfigMainArgs = append(t.LoadConfigMainArgs, mainPath)
+	if t.LoadConfigErr != nil {
+		return nil, t.LoadConfigErr
+	}
 	if t.Config == nil {
 		return &config.Config{}, nil
 	}
@@ -164,12 +193,18 @@ func (t *TestEffects) LoadConfig(currentPath, mainPath string) (*config.Config, 
 func (t *TestEffects) IsTrusted(repoRoot string) (bool, error) {
 	t.IsTrustedCalls++
 	t.IsTrustedArgs = append(t.IsTrustedArgs, repoRoot)
+	if t.IsTrustedErr != nil {
+		return false, t.IsTrustedErr
+	}
 	return t.TrustedRepos[repoRoot], nil
 }
 
 func (t *TestEffects) TrustRepo(repoRoot string) error {
 	t.TrustRepoCalls++
 	t.TrustRepoRepos = append(t.TrustRepoRepos, repoRoot)
+	if t.TrustRepoErr != nil {
+		return t.TrustRepoErr
+	}
 	t.TrustedRepos[repoRoot] = true
 	return nil
 }
@@ -177,6 +212,9 @@ func (t *TestEffects) TrustRepo(repoRoot string) error {
 func (t *TestEffects) OpenEditor(path string) error {
 	t.OpenEditorCalls++
 	t.OpenedPaths = append(t.OpenedPaths, path)
+	if t.OpenEditorErr != nil {
+		return t.OpenEditorErr
+	}
 	return nil
 }
 

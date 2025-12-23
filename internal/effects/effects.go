@@ -32,6 +32,9 @@ type Effects interface {
 	OpenEditor(path string) error
 
 	// Output
+	// Print and PrintErr are best-effort operations that write to stdout/stderr.
+	// They do not return errors for broken pipes or other output failures.
+	// If precise output handling is required, use a buffered writer with error checking.
 	Print(msg string)
 	PrintErr(msg string)
 
