@@ -21,7 +21,7 @@ func TestPlanTrustCommand(t *testing.T) {
 		// First action: print error
 		printErr, ok := plan.Actions[0].(PrintError)
 		require.True(t, ok, "Expected PrintError action")
-		assert.Equal(t, errNoRepoRoot, printErr.Msg)
+		assert.Equal(t, ErrNoRepoRoot.Error(), printErr.Msg)
 
 		// Second action: exit with failure code
 		exit, ok := plan.Actions[1].(Exit)
@@ -41,7 +41,7 @@ func TestPlanTrustCommand(t *testing.T) {
 
 		printErr, ok := plan.Actions[0].(PrintError)
 		require.True(t, ok, "Expected PrintError action")
-		assert.Equal(t, errNoRepoRoot, printErr.Msg)
+		assert.Equal(t, ErrNoRepoRoot.Error(), printErr.Msg)
 
 		exit, ok := plan.Actions[1].(Exit)
 		require.True(t, ok, "Expected Exit action")
@@ -60,7 +60,7 @@ func TestPlanTrustCommand(t *testing.T) {
 
 		printMsg, ok := plan.Actions[0].(PrintMessage)
 		require.True(t, ok, "Expected PrintMessage action")
-		assert.Equal(t, msgRepoAlreadyTrusted, printMsg.Msg)
+		assert.Contains(t, printMsg.Msg, "✅ Repository is already trusted: /test/repo")
 	})
 
 	t.Run("not yet trusted", func(t *testing.T) {
@@ -76,11 +76,14 @@ func TestPlanTrustCommand(t *testing.T) {
 		// First action: trust the repo
 		trustAction, ok := plan.Actions[0].(TrustRepo)
 		require.True(t, ok, "Expected TrustRepo action")
-		assert.Equal(t, "/test/repo", trustAction.Repo)
+		assert.Equal(t, "/test/repo", trustAction.RepoRoot)
 
-		// Second action: print success message
+		// Second action: print success message with hook instructions
 		printMsg, ok := plan.Actions[1].(PrintMessage)
 		require.True(t, ok, "Expected PrintMessage action")
-		assert.Equal(t, msgRepoTrusted, printMsg.Msg)
+		assert.Contains(t, printMsg.Msg, "✅ Repository trusted: /test/repo")
+		assert.Contains(t, printMsg.Msg, "on_create hooks")
+		assert.Contains(t, printMsg.Msg, "on_open hooks")
+		assert.Contains(t, printMsg.Msg, "--no-hooks")
 	})
 }

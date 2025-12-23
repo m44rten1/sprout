@@ -61,7 +61,7 @@ func (RunHooks) isAction() {}
 
 // TrustRepo marks a repository as trusted.
 type TrustRepo struct {
-	Repo string
+	RepoRoot string
 }
 
 func (TrustRepo) isAction() {}

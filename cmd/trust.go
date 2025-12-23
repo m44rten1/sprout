@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/m44rten1/sprout/internal/core"
+	"github.com/m44rten1/sprout/internal/effects"
 	"github.com/m44rten1/sprout/internal/git"
-	"github.com/m44rten1/sprout/internal/trust"
 
 	"github.com/spf13/cobra"
 )
@@ -21,21 +22,24 @@ WARNING: Only trust repositories you control or have reviewed the .sprout.yml fi
 Hooks can execute arbitrary commands on your system.`,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		// Create effects
+		fx := effects.NewRealEffects()
+
+		// Gather inputs: determine repo root
 		var repoRoot string
 		var err error
 
 		if len(args) > 0 {
-			// Trust the specified path
+			// Trust the specified path - verify it's a git repo
 			repoRoot = args[0]
-			// Verify it's a git repo
 			_, err := git.RunGitCommand(repoRoot, "rev-parse", "--show-toplevel")
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %s is not a git repository\n", repoRoot)
 				os.Exit(1)
 			}
 		} else {
-			// Trust current repo - use main worktree path for consistency
-			repoRoot, err = git.GetMainWorktreePath()
+			// Trust current repo - use main worktree path
+			repoRoot, err = fx.GetMainWorktreePath()
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
@@ -43,32 +47,28 @@ Hooks can execute arbitrary commands on your system.`,
 		}
 
 		// Check if already trusted
-		isTrusted, err := trust.IsRepoTrusted(repoRoot)
+		isTrusted, err := fx.IsTrusted(repoRoot)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to check trust status: %v\n", err)
 			os.Exit(1)
 		}
 
-		if isTrusted {
-			fmt.Printf("✅ Repository is already trusted: %s\n", repoRoot)
-			return
+		// Build context and plan
+		ctx := core.TrustContext{
+			RepoRoot:       repoRoot,
+			AlreadyTrusted: isTrusted,
 		}
 
-		// Trust the repo
-		if err := trust.TrustRepo(repoRoot); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to trust repository: %v\n", err)
+		plan := core.PlanTrustCommand(ctx)
+
+		// Execute plan
+		if err := effects.ExecutePlan(plan, fx); err != nil {
+			if code, ok := effects.IsExit(err); ok {
+				os.Exit(code)
+			}
+			fmt.Fprintf(os.Stderr, "Execution failed: %v\n", err)
 			os.Exit(1)
 		}
-
-	fmt.Println()
-	fmt.Printf("✅ Repository trusted: %s\n", repoRoot)
-	fmt.Println()
-	fmt.Println("Hooks defined in .sprout.yml will now run automatically:")
-	fmt.Println("  - sprout add           (runs on_create hooks)")
-	fmt.Println("  - sprout open          (runs on_open hooks)")
-	fmt.Println()
-	fmt.Println("Use --no-hooks flag to skip automatic execution.")
-	fmt.Println()
 	},
 }
 

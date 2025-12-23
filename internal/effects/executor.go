@@ -92,8 +92,8 @@ func executeAction(action core.Action, fx Effects) error {
 		return fmt.Errorf("RunHooks action not yet implemented (hook execution belongs in shell)")
 
 	case core.TrustRepo:
-		if err := fx.TrustRepo(a.Repo); err != nil {
-			return fmt.Errorf("trust repo %s: %w", a.Repo, err)
+		if err := fx.TrustRepo(a.RepoRoot); err != nil {
+			return fmt.Errorf("trust repo %s: %w", a.RepoRoot, err)
 		}
 		return nil
 

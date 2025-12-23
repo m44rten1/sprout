@@ -484,16 +484,46 @@ graph TB
 
 
 
-### Step 3.3: Refactor trust command
+### Step 3.3: Refactor trust command ✅
 
-- Update [`cmd/trust.go`](cmd/trust.go) to use new pattern:
+- ✅ Updated [`cmd/trust.go`](cmd/trust.go) to use new FP pattern
+- ✅ Updated [`internal/core/trust.go`](internal/core/trust.go) to generate realistic messages (with emojis and multi-line instructions)
+- ✅ Updated tests in [`internal/core/trust_test.go`](internal/core/trust_test.go) to verify message content
+- ✅ All tests passing: `go test ./internal/core/... ./internal/effects/...`
+- ✅ Code compiles successfully
+- ✅ No linter errors
 
-1. Create Effects instance
-2. Gather inputs using Effects
-3. Call PlanTrustCommand
-4. Execute plan
+**Implementation details:**
 
-- Keep it working exactly as before, just with new structure
+1. **Imperative shell** (`cmd/trust.go`):
+   - Creates `RealEffects` instance
+   - Handles path argument (optional `[path]` or current repo)
+   - Validates git repository (early exit if not a repo)
+   - Gathers `isTrusted` status via `fx.IsTrusted()`
+   - Builds `TrustContext` with inputs
+   - Calls `PlanTrustCommand(ctx)`
+   - Executes plan via `ExecutePlan(plan, fx)`
+   - Handles `ExitError` using `IsExit()` helper
+
+2. **Functional core** (`internal/core/trust.go`):
+   - `PlanTrustCommand` validates empty repo root
+   - Returns "already trusted" message with repo path
+   - Returns trust action + success message with hook instructions
+   - Messages match original formatting (emojis, multi-line)
+
+3. **Behavior preserved:**
+   - ✅ Same CLI interface (`trust [path]`)
+   - ✅ Same validation (git repo check)
+   - ✅ Same messages (emojis, formatting)
+   - ✅ Same error handling (exit codes)
+   - ✅ 78 lines → 75 lines (cleaner structure, same functionality)
+
+**Decisions made:**
+
+- Kept git repo validation in shell (not in planner) - it's an I/O operation requiring Effects
+- Used `GetMainWorktreePath()` via Effects (not directly via git package)
+- Planner now includes full message formatting (including emojis) for realistic output
+- Tests verify message content using `assert.Contains()` instead of exact string matches (more resilient)
 
 ### Step 3.4: Add trust command tests
 

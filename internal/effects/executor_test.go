@@ -101,7 +101,7 @@ func TestExecutePlan(t *testing.T) {
 	t.Run("TrustRepo calls TrustRepo", func(t *testing.T) {
 		fx := NewTestEffects()
 		plan := core.Plan{Actions: []core.Action{
-			core.TrustRepo{Repo: "/test/repo"},
+			core.TrustRepo{RepoRoot: "/test/repo"},
 		}}
 
 		err := ExecutePlan(plan, fx)
@@ -237,7 +237,7 @@ func TestExecutePlan_ErrorHandling(t *testing.T) {
 		fx.TrustRepoErr = fmt.Errorf("failed to write trust file")
 
 		plan := core.Plan{Actions: []core.Action{
-			core.TrustRepo{Repo: "/test/repo"},
+			core.TrustRepo{RepoRoot: "/test/repo"},
 			core.PrintMessage{Msg: "Should not print"},
 		}}
 
