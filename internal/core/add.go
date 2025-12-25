@@ -24,6 +24,7 @@ const (
 type AddContext struct {
 	Branch             string
 	RepoRoot           string
+	MainWorktreePath   string // Required for hooks
 	WorktreePath       string
 	WorktreeExists     bool
 	LocalBranchExists  bool
@@ -96,9 +97,11 @@ func PlanAddCommand(ctx AddContext) Plan {
 			actions = append(actions, OpenEditor{Path: ctx.WorktreePath})
 		}
 		actions = append(actions, RunHooks{
-			Type:     "on_create",
-			Commands: ctx.Config.Hooks.OnCreate,
-			Path:     ctx.WorktreePath,
+			Type:             "on_create",
+			Commands:         ctx.Config.Hooks.OnCreate,
+			Path:             ctx.WorktreePath,
+			RepoRoot:         ctx.RepoRoot,
+			MainWorktreePath: ctx.MainWorktreePath,
 		})
 	} else if !ctx.NoOpen {
 		// No hooks: open editor after creation

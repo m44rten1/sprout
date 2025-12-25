@@ -23,6 +23,14 @@ type TestEffects struct {
 	GitCommandOutput map[string]string // Key: "dir\nargs..." -> output
 	GitCommandErrors map[string]error  // Key: "dir\nargs..." -> error
 
+	// Branch existence mocking
+	LocalBranches  map[string]bool // branch name -> exists locally
+	RemoteBranches map[string]bool // branch name -> exists on remote
+
+	// Worktree path calculation
+	WorktreePaths      map[string]string // branch -> path mapping
+	GetWorktreePathErr error
+
 	// Error injection - set these to simulate failures
 	GetRepoRootErr         error
 	GetMainWorktreePathErr error
@@ -33,6 +41,9 @@ type TestEffects struct {
 	IsTrustedErr           error
 	TrustRepoErr           error
 	OpenEditorErr          error
+	RunHooksErr            error
+	LocalBranchExistsErr   error
+	RemoteBranchExistsErr  error
 
 	// Interaction results
 	SelectedBranchIndex   int
@@ -55,19 +66,27 @@ type TestEffects struct {
 	PrintErrCalls            int
 	SelectBranchCalls        int
 	SelectWorktreeCalls      int
+	RunHooksCalls            int
+	LocalBranchExistsCalls   int
+	RemoteBranchExistsCalls  int
+	GetWorktreePathCalls     int
 
 	// Call tracking (captured side effects and arguments)
-	ListWorktreesArgs     []string // repoRoot args passed to ListWorktrees
-	ListBranchesArgs      []string // repoRoot args passed to ListBranches
-	LoadConfigCurrentArgs []string // currentPath args passed to LoadConfig
-	LoadConfigMainArgs    []string // mainPath args passed to LoadConfig
-	IsTrustedArgs         []string // repoRoot args passed to IsTrusted
-	TrustRepoRepos        []string // Repos that had TrustRepo called
-	PrintedMsgs           []string // Messages printed via Print
-	PrintedErrs           []string // Messages printed via PrintErr
-	GitCommands           []GitCmd // Git commands executed
-	OpenedPaths           []string // Paths opened in editor
-	CreatedDirs           []string // Directories created via MkdirAll
+	ListWorktreesArgs        []string   // repoRoot args passed to ListWorktrees
+	ListBranchesArgs         []string   // repoRoot args passed to ListBranches
+	LoadConfigCurrentArgs    []string   // currentPath args passed to LoadConfig
+	LoadConfigMainArgs       []string   // mainPath args passed to LoadConfig
+	IsTrustedArgs            []string   // repoRoot args passed to IsTrusted
+	TrustRepoRepos           []string   // Repos that had TrustRepo called
+	PrintedMsgs              []string   // Messages printed via Print
+	PrintedErrs              []string   // Messages printed via PrintErr
+	GitCommands              []GitCmd   // Git commands executed
+	OpenedPaths              []string   // Paths opened in editor
+	CreatedDirs              []string   // Directories created via MkdirAll
+	RunHooksInvocations      []HookCall // Hooks that were run
+	LocalBranchExistsQueries []BranchQuery
+	RemoteBranchExistsQueries []BranchQuery
+	GetWorktreePathQueries    []WorktreePathQuery
 }
 
 // GitCmd represents a recorded git command execution.
@@ -76,29 +95,57 @@ type GitCmd struct {
 	Args []string
 }
 
+// HookCall represents a recorded hook execution.
+type HookCall struct {
+	RepoRoot           string
+	WorktreePath       string
+	MainWorktreePath   string
+	Commands           []string
+	HookType           string
+}
+
+// BranchQuery represents a branch existence check.
+type BranchQuery struct {
+	RepoRoot string
+	Branch   string
+}
+
+// WorktreePathQuery represents a worktree path calculation.
+type WorktreePathQuery struct {
+	RepoPath string
+	Branch   string
+}
+
 // NewTestEffects creates a new TestEffects with sensible defaults.
 func NewTestEffects() *TestEffects {
 	return &TestEffects{
-		RepoRoot:              "/test/repo",
-		MainWorktreePath:      "/test/repo",
-		Worktrees:             []git.Worktree{},
-		Branches:              []git.Branch{},
-		Config:                &config.Config{},
-		TrustedRepos:          make(map[string]bool),
-		Files:                 make(map[string]bool),
-		GitCommandOutput:      make(map[string]string),
-		GitCommandErrors:      make(map[string]error),
-		ListWorktreesArgs:     []string{},
-		ListBranchesArgs:      []string{},
-		LoadConfigCurrentArgs: []string{},
-		LoadConfigMainArgs:    []string{},
-		IsTrustedArgs:         []string{},
-		TrustRepoRepos:        []string{},
-		PrintedMsgs:           []string{},
-		PrintedErrs:           []string{},
-		GitCommands:           []GitCmd{},
-		OpenedPaths:           []string{},
-		CreatedDirs:           []string{},
+		RepoRoot:                  "/test/repo",
+		MainWorktreePath:          "/test/repo",
+		Worktrees:                 []git.Worktree{},
+		Branches:                  []git.Branch{},
+		Config:                    &config.Config{},
+		TrustedRepos:              make(map[string]bool),
+		Files:                     make(map[string]bool),
+		GitCommandOutput:          make(map[string]string),
+		GitCommandErrors:          make(map[string]error),
+		LocalBranches:             make(map[string]bool),
+		RemoteBranches:            make(map[string]bool),
+		WorktreePaths:             make(map[string]string),
+		ListWorktreesArgs:         []string{},
+		ListBranchesArgs:          []string{},
+		LoadConfigCurrentArgs:     []string{},
+		LoadConfigMainArgs:        []string{},
+		IsTrustedArgs:             []string{},
+		TrustRepoRepos:            []string{},
+		PrintedMsgs:               []string{},
+		PrintedErrs:               []string{},
+		GitCommands:               []GitCmd{},
+		OpenedPaths:               []string{},
+		CreatedDirs:               []string{},
+		RunHooksInvocations:       []HookCall{},
+		LocalBranchExistsQueries:  []BranchQuery{},
+		RemoteBranchExistsQueries: []BranchQuery{},
+		GetWorktreePathQueries:    []WorktreePathQuery{},
 	}
 }
 
@@ -248,4 +295,56 @@ func (t *TestEffects) SelectWorktree(worktrees []git.Worktree) (int, error) {
 		return -1, fmt.Errorf("invalid selection index")
 	}
 	return t.SelectedWorktreeIndex, nil
+}
+
+func (t *TestEffects) RunHooks(repoRoot, worktreePath, mainWorktreePath string, commands []string, hookType string) error {
+	t.RunHooksCalls++
+	t.RunHooksInvocations = append(t.RunHooksInvocations, HookCall{
+		RepoRoot:         repoRoot,
+		WorktreePath:     worktreePath,
+		MainWorktreePath: mainWorktreePath,
+		Commands:         commands,
+		HookType:         hookType,
+	})
+	return t.RunHooksErr
+}
+
+func (t *TestEffects) LocalBranchExists(repoRoot, branch string) (bool, error) {
+	t.LocalBranchExistsCalls++
+	t.LocalBranchExistsQueries = append(t.LocalBranchExistsQueries, BranchQuery{
+		RepoRoot: repoRoot,
+		Branch:   branch,
+	})
+	if t.LocalBranchExistsErr != nil {
+		return false, t.LocalBranchExistsErr
+	}
+	return t.LocalBranches[branch], nil
+}
+
+func (t *TestEffects) RemoteBranchExists(repoRoot, branch string) (bool, error) {
+	t.RemoteBranchExistsCalls++
+	t.RemoteBranchExistsQueries = append(t.RemoteBranchExistsQueries, BranchQuery{
+		RepoRoot: repoRoot,
+		Branch:   branch,
+	})
+	if t.RemoteBranchExistsErr != nil {
+		return false, t.RemoteBranchExistsErr
+	}
+	return t.RemoteBranches[branch], nil
+}
+
+func (t *TestEffects) GetWorktreePath(repoPath, branch string) (string, error) {
+	t.GetWorktreePathCalls++
+	t.GetWorktreePathQueries = append(t.GetWorktreePathQueries, WorktreePathQuery{
+		RepoPath: repoPath,
+		Branch:   branch,
+	})
+	if t.GetWorktreePathErr != nil {
+		return "", t.GetWorktreePathErr
+	}
+	if path, ok := t.WorktreePaths[branch]; ok {
+		return path, nil
+	}
+	// Default: generate a simple path
+	return fmt.Sprintf("%s/worktrees/%s", repoPath, branch), nil
 }

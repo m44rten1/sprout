@@ -44,4 +44,17 @@ type Effects interface {
 	// This maintains type safety while avoiding interface{} casting in callers.
 	SelectBranch(branches []git.Branch) (int, error)
 	SelectWorktree(worktrees []git.Worktree) (int, error)
+
+	// Hooks
+	// RunHooks executes hook commands in the given worktree.
+	// RepoRoot and MainWorktreePath are used for trust verification.
+	RunHooks(repoRoot, worktreePath, mainWorktreePath string, commands []string, hookType string) error
+
+	// Branch existence checks
+	LocalBranchExists(repoRoot, branch string) (bool, error)
+	// RemoteBranchExists checks if a branch exists on the remote (automatically prepends "origin/")
+	RemoteBranchExists(repoRoot, branch string) (bool, error)
+
+	// Path calculation
+	GetWorktreePath(repoPath, branch string) (string, error)
 }

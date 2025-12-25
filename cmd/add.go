@@ -3,17 +3,11 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
-	"github.com/m44rten1/sprout/internal/config"
 	"github.com/m44rten1/sprout/internal/core"
-	"github.com/m44rten1/sprout/internal/editor"
+	"github.com/m44rten1/sprout/internal/effects"
 	"github.com/m44rten1/sprout/internal/git"
-	"github.com/m44rten1/sprout/internal/hooks"
-	"github.com/m44rten1/sprout/internal/sprout"
-	"github.com/m44rten1/sprout/internal/tui"
-
 	"github.com/spf13/cobra"
 )
 
@@ -37,198 +31,152 @@ var addCmd = &cobra.Command{
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		// Get all branches
 		branches, err := git.ListAllBranches(repoRoot)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		// Get all worktrees to exclude branches that are already checked out
 		worktrees, err := git.ListWorktrees(repoRoot)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		// Build a set of branches that are already checked out
-		checkedOutBranches := make(map[string]bool)
-		for _, wt := range worktrees {
-			if wt.Branch != "" {
-				checkedOutBranches[wt.Branch] = true
-			}
-		}
+		// Reuse core logic to filter available branches
+		availableBranches := core.GetWorktreeAvailableBranches(branches, worktrees)
 
 		var completions []string
-		for _, branch := range branches {
-			// Skip branches that are already checked out in any worktree
-			if checkedOutBranches[branch.DisplayName] {
-				continue
+		for _, branch := range availableBranches {
+			// Filter by what user has typed so far
+			if strings.HasPrefix(branch.DisplayName, toComplete) {
+				completions = append(completions, branch.DisplayName)
 			}
-			// Skip "origin" which is a remote name, not a branch
-			if branch.DisplayName == "origin" {
-				continue
-			}
-			completions = append(completions, branch.DisplayName)
 		}
 
 		return completions, cobra.ShellCompDirectiveNoFileComp
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		var branch string
+		fx := effects.NewRealEffects()
 
-		// Get repo root first for potential interactive mode
-		repoRoot, err := git.GetRepoRoot()
+		ctx, err := BuildAddContext(fx, args, addNoHooksFlag, addNoOpenFlag)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 
-		// Use main worktree path for consistent sprout root calculation
-		mainRepoRoot, err := git.GetMainWorktreePath()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to get main worktree: %v\n", err)
+		plan := core.PlanAddCommand(ctx)
+		if err := effects.ExecutePlan(plan, fx); err != nil {
+			if code, ok := effects.IsExit(err); ok {
+				os.Exit(code)
+			}
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
-		}
-
-		// Interactive mode: select from existing branches
-		if len(args) == 0 {
-			branches, err := git.ListAllBranches(repoRoot)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to list branches: %v\n", err)
-				os.Exit(1)
-			}
-
-			// Get all worktrees to exclude branches that are already checked out
-			worktrees, err := git.ListWorktrees(repoRoot)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to list worktrees: %v\n", err)
-				os.Exit(1)
-			}
-
-			// Get branches available for worktree creation
-			availableBranches := core.GetWorktreeAvailableBranches(branches, worktrees)
-
-			if len(availableBranches) == 0 {
-				fmt.Println("No available branches found.")
-				return
-			}
-
-			idx, err := tui.SelectOne(availableBranches, func(b git.Branch) string {
-				return b.DisplayName
-			}, nil)
-
-			if err != nil {
-				// User cancelled or error occurred
-				return
-			}
-
-			branch = availableBranches[idx].DisplayName
-		} else {
-			branch = args[0]
-		}
-
-		// Strip remote prefix if user provided it (e.g., "origin/feature" -> "feature")
-		// This prevents issues with branch name construction in git commands
-		branch = strings.TrimPrefix(branch, "origin/")
-
-		worktreePath, err := sprout.GetWorktreePath(mainRepoRoot, branch)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error calculating worktree path: %v\n", err)
-			os.Exit(1)
-		}
-
-		// Check if worktree already exists
-		if _, err := os.Stat(worktreePath); err == nil {
-			fmt.Printf("Worktree already exists at %s\n", worktreePath)
-			if err := editor.Open(worktreePath); err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to open editor: %v\n", err)
-			}
-			return
-		}
-
-		// Get main worktree path for config loading
-		mainWorktreePath, err := git.GetMainWorktreePath()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to get main worktree path: %v\n", err)
-			os.Exit(1)
-		}
-
-		// Check if .sprout.yml exists and has on_create hooks
-		cfg, err := config.Load(repoRoot, mainWorktreePath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
-			os.Exit(1)
-		}
-
-		shouldRunHooks := cfg.HasCreateHooks() && !addNoHooksFlag
-
-		// If hooks should run, verify repo is trusted before creating worktree
-		if shouldRunHooks {
-			untrusted, err := hooks.CheckAndPrintUntrusted(repoRoot, mainWorktreePath)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to check trust status: %v\n", err)
-				os.Exit(1)
-			}
-
-			if untrusted {
-				// Hooks exist but repo is not trusted - abort before creating worktree
-				os.Exit(1)
-			}
-		}
-
-		fmt.Printf("Creating worktree for %s at %s...\n", branch, worktreePath)
-
-		// Create parent directory
-		if err := os.MkdirAll(filepath.Dir(worktreePath), 0755); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to create parent directory: %v\n", err)
-			os.Exit(1)
-		}
-
-		// Check if branch exists locally
-		localExists, _ := git.LocalBranchExists(repoRoot, branch)
-
-		// Check if remote branch exists
-		remoteBranchExists, _ := git.BranchExists(repoRoot, "origin/"+branch)
-
-		// Check if origin/main exists (for new branch creation)
-		hasOriginMain, _ := git.BranchExists(repoRoot, "origin/main")
-
-		// Build git worktree add command using pure function
-		gitArgs := core.WorktreeAddArgs(worktreePath, branch, localExists, remoteBranchExists, hasOriginMain)
-
-		if _, err := git.RunGitCommand(repoRoot, gitArgs...); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to create worktree: %v\n", err)
-			os.Exit(1)
-		}
-
-		fmt.Println("Worktree created!")
-
-		// Open editor first if not disabled and hooks will run
-		// This allows user to start browsing code while hooks run in terminal
-		if !addNoOpenFlag && shouldRunHooks {
-			if err := editor.Open(worktreePath); err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to open editor: %v\n", err)
-			}
-		}
-
-		// Run on_create hooks automatically if they exist and repo is trusted
-		if shouldRunHooks {
-			if err := hooks.RunHooks(repoRoot, worktreePath, mainWorktreePath, hooks.OnCreate); err != nil {
-				if _, ok := err.(*hooks.UntrustedError); ok {
-					hooks.PrintUntrustedMessage(mainWorktreePath)
-				} else {
-					fmt.Fprintf(os.Stderr, "Error running hooks: %v\n", err)
-					os.Exit(1)
-				}
-			}
-		}
-
-		// Open editor after everything if hooks didn't run and --no-open wasn't set
-		if !shouldRunHooks && !addNoOpenFlag {
-			if err := editor.Open(worktreePath); err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to open editor: %v\n", err)
-			}
 		}
 	},
+}
+
+// BuildAddContext gathers all inputs needed to plan the add command.
+// It handles interactive branch selection if no branch is provided.
+func BuildAddContext(fx effects.Effects, args []string, noHooks, noOpen bool) (core.AddContext, error) {
+	// Get repo root
+	repoRoot, err := fx.GetRepoRoot()
+	if err != nil {
+		return core.AddContext{}, fmt.Errorf("not a git repository: %w", err)
+	}
+
+	// Get main worktree path for config loading and hooks
+	mainWorktreePath, err := fx.GetMainWorktreePath()
+	if err != nil {
+		return core.AddContext{}, fmt.Errorf("failed to get main worktree: %w", err)
+	}
+
+	// Determine branch name (interactive or from args)
+	var branch string
+	if len(args) == 0 {
+		// Interactive mode: select from existing branches
+		branches, err := fx.ListBranches(repoRoot)
+		if err != nil {
+			return core.AddContext{}, fmt.Errorf("failed to list branches: %w", err)
+		}
+
+		worktrees, err := fx.ListWorktrees(repoRoot)
+		if err != nil {
+			return core.AddContext{}, fmt.Errorf("failed to list worktrees: %w", err)
+		}
+
+		availableBranches := core.GetWorktreeAvailableBranches(branches, worktrees)
+		if len(availableBranches) == 0 {
+			return core.AddContext{}, fmt.Errorf("no available branches found")
+		}
+
+		idx, err := fx.SelectBranch(availableBranches)
+		if err != nil {
+			return core.AddContext{}, fmt.Errorf("branch selection cancelled: %w", err)
+		}
+
+		branch = availableBranches[idx].DisplayName
+	} else {
+		branch = args[0]
+	}
+
+	// Strip remote prefix if user provided it (e.g., "origin/feature" -> "feature")
+	branch = strings.TrimPrefix(branch, "origin/")
+
+	// Calculate worktree path
+	worktreePath, err := fx.GetWorktreePath(mainWorktreePath, branch)
+	if err != nil {
+		return core.AddContext{}, fmt.Errorf("error calculating worktree path: %w", err)
+	}
+
+	// Check if worktree already exists
+	worktreeExists := fx.FileExists(worktreePath)
+
+	// Check branch existence
+	localBranchExists, err := fx.LocalBranchExists(repoRoot, branch)
+	if err != nil {
+		return core.AddContext{}, fmt.Errorf("failed to check local branch: %w", err)
+	}
+
+	remoteBranchExists, err := fx.RemoteBranchExists(repoRoot, branch)
+	if err != nil {
+		return core.AddContext{}, fmt.Errorf("failed to check remote branch: %w", err)
+	}
+
+	// Check if origin/main exists (used as base for new branches)
+	// Note: RemoteBranchExists automatically prepends "origin/" prefix
+	hasRemoteMain, err := fx.RemoteBranchExists(repoRoot, "main")
+	if err != nil {
+		return core.AddContext{}, fmt.Errorf("failed to check origin/main: %w", err)
+	}
+
+	// Load config
+	cfg, err := fx.LoadConfig(repoRoot, mainWorktreePath)
+	if err != nil {
+		return core.AddContext{}, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Check trust status (only matters if hooks will run)
+	isTrusted := false
+	if cfg.HasCreateHooks() && !noHooks {
+		isTrusted, err = fx.IsTrusted(mainWorktreePath)
+		if err != nil {
+			return core.AddContext{}, fmt.Errorf("failed to check trust status: %w", err)
+		}
+	}
+
+	return core.AddContext{
+		Branch:             branch,
+		RepoRoot:           repoRoot,
+		MainWorktreePath:   mainWorktreePath,
+		WorktreePath:       worktreePath,
+		WorktreeExists:     worktreeExists,
+		LocalBranchExists:  localBranchExists,
+		RemoteBranchExists: remoteBranchExists,
+		HasOriginMain:      hasRemoteMain,
+		Config:             cfg,
+		IsTrusted:          isTrusted,
+		NoHooks:            noHooks,
+		NoOpen:             noOpen,
+	}, nil
 }
 
 func init() {

@@ -52,9 +52,11 @@ func (OpenEditor) isAction() {}
 
 // RunHooks executes hook commands in the specified directory.
 type RunHooks struct {
-	Type     string   // "on_create", "on_remove", etc.
-	Commands []string // Shell commands to execute
-	Path     string   // Working directory for hooks
+	Type             string   // "on_create", "on_remove", etc.
+	Commands         []string // Shell commands to execute
+	Path             string   // Working directory for hooks (worktree path)
+	RepoRoot         string   // Repository root
+	MainWorktreePath string   // Main worktree path (for trust checks)
 }
 
 func (RunHooks) isAction() {}

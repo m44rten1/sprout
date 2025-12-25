@@ -7,6 +7,8 @@ import (
 	"github.com/m44rten1/sprout/internal/config"
 	"github.com/m44rten1/sprout/internal/editor"
 	"github.com/m44rten1/sprout/internal/git"
+	"github.com/m44rten1/sprout/internal/hooks"
+	"github.com/m44rten1/sprout/internal/sprout"
 	"github.com/m44rten1/sprout/internal/trust"
 	"github.com/m44rten1/sprout/internal/tui"
 )
@@ -95,4 +97,20 @@ func worktreeLabel(w git.Worktree) string {
 		return w.Branch
 	}
 	return w.Path
+}
+
+func (r *RealEffects) RunHooks(repoRoot, worktreePath, mainWorktreePath string, commands []string, hookType string) error {
+	return hooks.RunHooks(repoRoot, worktreePath, mainWorktreePath, hooks.HookType(hookType))
+}
+
+func (r *RealEffects) LocalBranchExists(repoRoot, branch string) (bool, error) {
+	return git.LocalBranchExists(repoRoot, branch)
+}
+
+func (r *RealEffects) RemoteBranchExists(repoRoot, branch string) (bool, error) {
+	return git.BranchExists(repoRoot, "origin/"+branch)
+}
+
+func (r *RealEffects) GetWorktreePath(repoPath, branch string) (string, error) {
+	return sprout.GetWorktreePath(repoPath, branch)
 }

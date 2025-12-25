@@ -85,11 +85,10 @@ func executeAction(action core.Action, fx Effects) error {
 		return nil
 
 	case core.RunHooks:
-		// RunHooks is not yet implemented in the executor.
-		// Hook execution involves trust checks and config loading,
-		// which should be handled by the shell/planner, not the executor.
-		// We'll implement this when refactoring the add command.
-		return fmt.Errorf("RunHooks action not yet implemented (hook execution belongs in shell)")
+		if err := fx.RunHooks(a.RepoRoot, a.Path, a.MainWorktreePath, a.Commands, a.Type); err != nil {
+			return fmt.Errorf("run %s hooks: %w", a.Type, err)
+		}
+		return nil
 
 	case core.TrustRepo:
 		if err := fx.TrustRepo(a.RepoRoot); err != nil {
