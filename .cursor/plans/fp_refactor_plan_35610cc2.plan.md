@@ -618,7 +618,80 @@ graph TB
 
 ## Phase 4: Second Command - add (Week 3)
 
-### Step 4.1: Create add command planner
+### Step 4.1: Create add command planner ✅
+
+- ✅ Created [`internal/core/add.go`](internal/core/add.go) with `AddContext` and `PlanAddCommand`
+- ✅ Created [`internal/core/add_test.go`](internal/core/add_test.go) with 15 comprehensive test cases
+- ✅ All tests passing: `go test ./internal/core/... -run TestPlanAddCommand`
+- ✅ No linter errors
+- ✅ Code review feedback addressed (round 1)
+- ✅ Code review feedback addressed (round 2 - test improvements)
+
+**Implementation details:**
+
+- `AddContext` contains 11 inputs (removed unused `MainWorktreePath`)
+- `PlanAddCommand` validates inputs (including nil config check), checks worktree existence, trust requirements
+- Builds action sequence: print → create dir → git worktree add → print success → editor → hooks
+- Added `errorPlan()` helper for consistent error handling
+- Message constants for UX consistency
+- **NoOpen flag respected in ALL code paths** (fixed bug where it was ignored with hooks)
+
+**Test coverage (15 cases):**
+
+- Worktree already exists (opens editor only)
+- Worktree already exists + `--no-open` (no editor)
+- New branch with hooks + trusted (full sequence with hooks + editor)
+- New branch with hooks + untrusted (error exit)
+- **New branch with hooks + `--no-open`** (runs hooks WITHOUT editor - **new test**)
+- New branch without hooks (no trust check required)
+- With `--no-hooks` flag (skips hooks even if config exists)
+- With `--no-open` flag (skips editor)
+- With both flags (creates worktree only)
+- Local branch exists (no `-b` flag)
+- Remote branch exists (tracks remote)
+- Empty validation (3 cases: repo root, worktree path, branch name)
+- Nil config
+
+**Decisions made:**
+
+- Hook execution order: open editor FIRST, then run hooks (user can browse while hooks run in terminal)
+- Trust check happens BEFORE creating worktree (prevents orphaned worktrees on untrusted repos)
+- Error messages include instructions: "To trust this repository, run: sprout trust"
+- `--no-hooks` bypasses trust check (explicit user override)
+- No hooks configured = no trust check required (safe default)
+- `errorPlan()` helper creates consistent `PrintError` + `Exit{Code: 1}` pattern
+- **NoOpen is ALWAYS respected** - even when hooks run (matches original behavior)
+
+**Code review improvements applied (round 1):**
+
+1. ✅ **Fixed nil config panic**: Added explicit `ctx.Config == nil` guard with error message
+2. ✅ **Fixed NoOpen inconsistency**: Now respects `--no-open` flag even when worktree already exists
+3. ✅ **Removed unused MainWorktreePath**: Not needed in planner (only used by imperative shell for config loading)
+4. ✅ **Improved documentation**: Updated comment to accurately reflect editor/hooks order variations
+5. ✅ **Added explicit contract**: Documented "Config must not be nil" in struct comment
+6. ✅ **Better comment clarity**: Explained hooks+editor order policy inline with code
+
+**Code review improvements applied (round 2 - test quality):**
+
+1. ✅ **Fixed production bug**: NoOpen was ignored when hooks run - now properly checked in both branches
+2. ✅ **Used require.Len**: Prevents panic if action count is wrong (was assert.Len)
+3. ✅ **Consistent type assertions**: Replaced `assert.NotEqual(RunHooks{}, action)` with proper type check `_, isRunHooks := action.(RunHooks)`
+4. ✅ **Added missing test**: "hooks + NoOpen" semantics now explicitly tested and documented
+5. ✅ **Fixed parallel test pattern**: Added `tt := tt` capture for Go <1.22 compatibility, removed outer `t.Parallel()`
+6. ✅ **Added require import**: Imported `testify/require` for precondition checks
+
+**Key learnings from code reviews:**
+
+- Validate what you actually use - `MainWorktreePath` was required for config loading upstream but not in planner itself
+- Nil pointer guards are critical even for "expected to be non-nil" fields - make contracts explicit
+- Flag semantics should be consistent across all code paths (NoOpen in "exists" vs "create" branches)
+- Comments should match actual behavior variations, not just the "happy path"
+- Table-driven tests are executable documentation of domain rules
+- **Tests can catch production bugs**: Reviewing test coverage revealed NoOpen + hooks inconsistency
+- **Use require for preconditions**: If length check fails, subsequent assertions will panic
+- **Type assertions over struct comparisons**: More idiomatic and prevents zero-value confusion
+- **Test all flag combinations**: Missing "hooks + NoOpen" revealed incomplete flag handling
+- **Capture loop vars for parallel tests**: Go <1.22 requires `tt := tt` pattern
 
 - Create [`internal/core/add.go`](internal/core/add.go):
   ```go
