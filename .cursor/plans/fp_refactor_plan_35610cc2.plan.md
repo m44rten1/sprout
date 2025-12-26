@@ -22,7 +22,7 @@ todos:
       - phase3-trust
   - id: phase5-remaining
     content: Refactor open, remove, list, repair, and hooks commands
-    status: pending
+    status: completed
     dependencies:
       - phase4-add
   - id: phase6-polish
@@ -206,12 +206,12 @@ graph TB
                                                         CheckTrust
                                                         SelectInteractive
                                                     )
-    
+
                                                     type Action struct {
                                                         Type ActionType
                                                         Data map[string]any // Use any for flexibility
                                                     }
-    
+
                                                     type Plan struct {
                                                         Actions []Action
                                                     }
@@ -257,25 +257,25 @@ graph TB
                                                         ListWorktrees(repoRoot string) ([]git.Worktree, error)
                                                         ListBranches(repoRoot string) ([]git.Branch, error)
                                                         RunGitCommand(dir string, args ...string) (string, error)
-    
+
                                                         // File system
                                                         FileExists(path string) bool
                                                         CreateDir(path string, perm os.FileMode) error
-    
+
                                                         // Config
                                                         LoadConfig(currentPath, mainPath string) (*config.Config, error)
-    
+
                                                         // Trust
                                                         IsTrusted(repoRoot string) (bool, error)
                                                         TrustRepo(repoRoot string) error
-    
+
                                                         // Editor
                                                         OpenEditor(path string) error
-    
+
                                                         // Output
                                                         Print(msg string)
                                                         PrintErr(msg string)
-    
+
                                                         // Interactive (kept at edge)
                                                         SelectOne(items any, displayFunc any) (int, error)
                                                     }
@@ -714,27 +714,27 @@ graph TB
                                                         NoHooks bool
                                                         NoOpen bool
                                                     }
-    
+
                                                     func PlanAddCommand(ctx AddContext) (Plan, error) {
                                                         // Validation
                                                         if err := sprout.ValidateBranchName(ctx.Branch); err != nil {
                                                             return Plan{}, err
                                                         }
-    
+
                                                         // If exists, just open
                                                         if ctx.WorktreeExists {
                                                             return Plan{Actions: []Action{
                                                                 {Type: OpenEditor, Data: map[string]any{"path": ctx.WorktreePath}},
                                                             }}, nil
                                                         }
-    
+
                                                         // Check trust requirements
                                                         if ctx.Config.HasCreateHooks() && !ctx.NoHooks && !ctx.IsTrusted {
                                                             return Plan{Actions: []Action{
                                                                 {Type: PrintError, Data: map[string]any{"msg": "Repository not trusted"}},
                                                             }}, fmt.Errorf("untrusted")
                                                         }
-    
+
                                                         // Build action sequence
                                                         actions := []Action{
                                                             {Type: CreateDirectory, Data: map[string]any{
@@ -747,7 +747,7 @@ graph TB
                                                                                                        ctx.RemoteBranchExists, true),
                                                             }},
                                                         }
-    
+
                                                         // Hooks and editor logic
                                                         shouldRunHooks := ctx.Config.HasCreateHooks() && !ctx.NoHooks
                                                         if shouldRunHooks {
@@ -764,7 +764,7 @@ graph TB
                                                                 Action{Type: OpenEditor, Data: map[string]any{"path": ctx.WorktreePath}},
                                                             )
                                                         }
-    
+
                                                         return Plan{Actions: actions}, nil
                                                     }
   ```
@@ -914,19 +914,51 @@ graph TB
 
 ## Phase 5: Remaining Commands (Week 4-5)
 
-### Step 5.1: Refactor open command
+### Step 5.1: Refactor open command ✅
 
-- Create [`internal/core/open.go`](internal/core/open.go) with `PlanOpenCommand`
-- Create [`internal/core/open_test.go`](internal/core/open_test.go)
-- Update [`cmd/open.go`](cmd/open.go) to use new pattern
-- Test scenarios: path arg, branch arg, interactive, with/without hooks
+- ✅ Created [`internal/core/open.go`](internal/core/open.go) with `OpenContext` and `PlanOpenCommand`
+- ✅ Created [`internal/core/open_test.go`](internal/core/open_test.go) with comprehensive test cases
+- ✅ Updated [`cmd/open.go`](cmd/open.go) to use FP pattern with `BuildOpenContext`
+- ✅ Created [`cmd/open_test.go`](cmd/open_test.go) with integration tests
+- ✅ All tests passing, no linter errors
 
-### Step 5.2: Refactor remove command
+**Implementation details:**
 
-- Create [`internal/core/remove.go`](internal/core/remove.go) with `PlanRemoveCommand`
-- Add safety validation logic as pure function
-- Update [`cmd/remove.go`](cmd/remove.go)
-- Test edge cases: non-sprout paths, main worktree, etc.
+- `OpenContext` contains 6 inputs (TargetPath, RepoRoot, MainWorktreePath, Config, IsTrusted, NoHooks)
+- `PlanOpenCommand` validates inputs, opens editor, optionally runs on_open hooks
+- Trust check happens before opening editor (fail-fast for security)
+- Hooks run after editor opens (user can browse while hooks execute)
+- Test coverage: path arg, branch arg, interactive, with/without hooks, trust validation
+
+**Decisions made:**
+
+- Hook execution order: editor FIRST, then hooks (consistent with add command)
+- Trust validation in planner prevents untrusted repos from executing hooks
+- `--no-hooks` flag bypasses hook execution (explicit user override)
+- No hooks configured = no trust check required
+
+### Step 5.2: Refactor remove command ✅
+
+- ✅ Created [`internal/core/remove.go`](internal/core/remove.go) with `RemoveContext` and `PlanRemoveCommand`
+- ✅ Created [`internal/core/remove_test.go`](internal/core/remove_test.go) with comprehensive test cases
+- ✅ Updated [`cmd/remove.go`](cmd/remove.go) to use FP pattern with `BuildRemoveContext`
+- ✅ Created [`cmd/remove_test.go`](cmd/remove_test.go) with integration tests
+- ✅ All tests passing, no linter errors
+
+**Implementation details:**
+
+- `RemoveContext` contains worktree path, repo root, force flag, branch name
+- `PlanRemoveCommand` validates sprout path safety, handles dirty worktrees with --force
+- Safety validation ensures only sprout-managed worktrees can be removed
+- Prunes stale git references after removal
+- Test coverage: path validation, dirty worktrees, force flag, branch names
+
+**Decisions made:**
+
+- Safety first: only remove worktrees under sprout root directories
+- Dirty worktree check prevents accidental data loss
+- `--force` flag allows removal with uncommitted changes (explicit user override)
+- Automatic pruning after removal keeps git metadata clean
 
 ### Step 5.3: Refactor list command ✅
 
@@ -993,12 +1025,55 @@ graph TB
 - **Error messages matter** - distinguish "nothing found" from "something broke"
 - **User-friendly CLI** - no results shouldn't feel like a failure
 
-### Step 5.4: Refactor repair and hooks commands
+### Step 5.4: Refactor repair command ✅ (REMOVED)
 
-- Create [`internal/core/repair.go`](internal/core/repair.go)
-- Create [`internal/core/hooks_display.go`](internal/core/hooks_display.go)
-- Update [`cmd/repair.go`](cmd/repair.go) and [`cmd/hooks.go`](cmd/hooks.go)
-- These are simpler, should be straightforward
+- ✅ Created [`internal/core/repair.go`](internal/core/repair.go) with `RepairContext` and `PlanRepair`
+- ✅ Created [`internal/core/repair_test.go`](internal/core/repair_test.go) with comprehensive test cases
+- ✅ **Deleted [`cmd/repair.go`](cmd/repair.go)** - replaced with automatic repair
+- ✅ Updated [`cmd/root.go`](cmd/root.go) with `PersistentPreRun` auto-repair hook
+- ✅ All tests passing, no linter errors
+
+**Architecture decision:** Instead of a standalone `repair` command, sprout now auto-repairs worktree metadata before every command execution. This follows the "it just works" philosophy.
+
+**Implementation details:**
+
+- `RepairContext` contains list of repository paths to repair
+- `PlanRepair` generates `RunGitCommand` actions for each repository
+- Empty repos → empty plan (no unnecessary NoOp actions)
+- Auto-repair runs silently via `PersistentPreRun` in root command
+- Skips repair for `completion` and `help` commands (performance)
+- Debug mode: `SPROUT_DEBUG=1` shows repair output
+- Test mode: skips auto-repair when `flag.Lookup("test.v")` or `SPROUT_SKIP_AUTOREPAIR=1`
+
+**Decisions made:**
+
+- **Remove manual command, add automatic repair** - users never think about metadata
+- Silent by default - only shows output in debug mode
+- Empty plan pattern (`Plan{Actions: nil}`) instead of explicit NoOp
+- Preallocate slice capacity for multi-repo repairs
+- Stderr for debug output (doesn't pollute stdout)
+- Graceful error handling: panics swallowed, errors logged in debug mode only
+
+**Code review improvements applied:**
+
+1. ✅ Documentation: "creates a Plan that will run" (not "runs")
+2. ✅ Changed "Pure function" → "Deterministic" (more Go-idiomatic)
+3. ✅ Used empty plan instead of NoOp action (consistent with codebase)
+4. ✅ Preallocated slice: `make([]Action, 0, len(ctx.Repos))`
+5. ✅ Improved type assertions in tests with `assert.IsType` before casting
+6. ✅ Added `SPROUT_DEBUG` env var for visibility
+7. ✅ Added `SPROUT_SKIP_AUTOREPAIR` env var for explicit control
+
+**Key learnings:**
+
+- Not all commands need manual invocation - auto-repair is more user-friendly
+- Debug modes enable troubleshooting without cluttering normal output
+- Empty plans are cleaner than explicit no-op actions
+- Functional core works perfectly for automatic background operations
+
+### Step 5.5: hooks command status
+
+**Status:** Not yet refactored - `hooks` command displays hook configuration and doesn't fit the action planner pattern (similar to `list`). It's a pure display operation that may benefit from extracting formatting functions if complexity grows, but current implementation is already clean.
 
 ## Phase 6: Polish and Documentation (Week 5)
 
