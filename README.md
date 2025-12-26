@@ -120,13 +120,13 @@ Output includes:
 - 📦 Repository names (bold) with full paths (dim)
 - Branch names (green) with worktree paths (dim)
 - **Git status indicators** showing the state of each worktree:
-  - 🔴 Dirty (uncommitted changes)
-  - ⬆️ Ahead (unpushed commits)
-  - ⬇️ Behind (needs pull)
-  - 🔀 Unmerged (commits not in main/master)
+  - ✗ (red) Dirty - uncommitted changes
+  - ↑ (yellow) Ahead - unpushed commits
+  - ↓ (cyan) Behind - needs pull
+  - ↕ (magenta) Unmerged - commits not in main/master
 - Globally aligned columns for easy scanning
 
-Clean worktrees show no indicators. Multiple indicators can appear together (e.g., 🔴🔀).
+Clean worktrees show no indicators. Multiple indicators can appear together (e.g., ✗ ↕).
 
 ## 🪝 Project Hooks
 
