@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 
 	"github.com/m44rten1/sprout/internal/core"
@@ -34,8 +33,12 @@ Clean worktrees show no indicators.`,
 		if listAllFlag {
 			repos, err := collectAllRepos()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to discover repositories: %v\n", err)
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
+			}
+			if len(repos) == 0 {
+				fmt.Println("\nNo sprout worktrees found.")
+				return
 			}
 			printRepos(repos, true)
 			return
@@ -81,7 +84,9 @@ type RepoWorktrees struct {
 }
 
 // collectCurrentRepo gathers information about the current repository.
-// Returns empty RepoInfo if no sprout worktrees exist (not an error).
+// Returns (repo, true, nil) if sprout worktrees exist.
+// Returns (empty, false, nil) if no sprout worktrees exist (not an error).
+// Returns (empty, false, err) if git introspection fails or repo has no worktrees at all.
 func collectCurrentRepo() (RepoInfo, bool, error) {
 	repoRoot, err := git.GetRepoRoot()
 	if err != nil {
@@ -116,13 +121,17 @@ func collectCurrentRepo() (RepoInfo, bool, error) {
 }
 
 // collectAllRepos discovers all sprout-managed repositories.
+// Returns nil, nil if no repositories are found (not an error).
 func collectAllRepos() ([]RepoInfo, error) {
-	repoDirs := findAllRepoDirectories()
-	repoMap := discoverReposParallel(repoDirs)
-
-	if len(repoMap) == 0 {
-		return nil, fmt.Errorf("no sprout-managed worktrees found")
+	repoDirs, err := findAllRepoDirectories()
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan sprout directories: %w", err)
 	}
+	if len(repoDirs) == 0 {
+		return nil, nil
+	}
+
+	repoMap := discoverReposParallel(repoDirs)
 
 	// Convert map to sorted slice
 	repos := make([]RepoInfo, 0, len(repoMap))
@@ -138,29 +147,37 @@ func collectAllRepos() ([]RepoInfo, error) {
 }
 
 // findAllRepoDirectories scans the sprout root for repository directories.
-func findAllRepoDirectories() []string {
+// Returns nil, nil if sprout directory doesn't exist (user hasn't used sprout yet).
+// Returns error if sprout directory exists but can't be read (permissions, IO error).
+func findAllRepoDirectories() ([]string, error) {
 	sproutRoot, err := sprout.GetSproutRoot()
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("get sprout root: %w", err)
 	}
 
-	var repoDirs []string
-	if _, err := os.Stat(sproutRoot); os.IsNotExist(err) {
-		return nil
+	// Check if sprout directory exists
+	if _, err := os.Stat(sproutRoot); err != nil {
+		if os.IsNotExist(err) {
+			// Not an error - user just hasn't created any worktrees yet
+			return nil, nil
+		}
+		// Real error - permissions, IO problem, etc.
+		return nil, fmt.Errorf("stat sprout directory: %w", err)
 	}
 
 	entries, err := os.ReadDir(sproutRoot)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("read sprout directory: %w", err)
 	}
 
+	var repoDirs []string
 	for _, entry := range entries {
 		if entry.IsDir() {
 			repoDirs = append(repoDirs, filepath.Join(sproutRoot, entry.Name()))
 		}
 	}
 
-	return repoDirs
+	return repoDirs, nil
 }
 
 // discoverReposParallel processes repo directories in parallel and returns a map of repos.
@@ -289,57 +306,15 @@ func printRepos(repos []RepoInfo, showRepoHeaders bool) {
 
 // printWorktree prints a single worktree with formatting.
 func printWorktree(wt WorktreeInfo, isLast bool, useTreeLines bool) {
-	icon := "🌱 "
-	if wt.IsMain {
-		icon = ""
+	display := core.WorktreeDisplay{
+		Branch:       wt.Worktree.Branch,
+		Path:         core.ShortenPath(wt.Worktree.Path),
+		StatusEmojis: core.BuildStatusEmojis(wt.Status),
+		IsMain:       wt.IsMain,
+		IsLast:       isLast,
+		UseTreeLines: useTreeLines,
 	}
-
-	branch := wt.Worktree.Branch
-	if branch == "" {
-		branch = "(detached)"
-	}
-
-	statusStr := buildStatusEmojis(wt.Status)
-
-	// Tree line characters
-	branchPrefix := ""
-	pathPrefix := ""
-	if useTreeLines {
-		if isLast {
-			branchPrefix = "└── "
-			pathPrefix = "    "
-		} else {
-			branchPrefix = "├── "
-			pathPrefix = "│   "
-		}
-	}
-
-	label := fmt.Sprintf("%s%s\033[32m%s\033[0m", branchPrefix, icon, branch)
-
-	if statusStr != "" {
-		fmt.Printf("%s %s\n", label, statusStr)
-	} else {
-		fmt.Printf("%s\n", label)
-	}
-
-	if pathPrefix != "" {
-		fmt.Printf("%s \033[90m%s\033[0m\n", pathPrefix, shortenPath(wt.Worktree.Path))
-	} else {
-		fmt.Printf("\033[90m%s\033[0m\n", shortenPath(wt.Worktree.Path))
-	}
-	// fmt.Println() // Blank line after each worktree
-}
-
-// shortenPath replaces the home directory with ~ for shorter display.
-func shortenPath(path string) string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return path
-	}
-	if strings.HasPrefix(path, home) {
-		return "~" + strings.TrimPrefix(path, home)
-	}
-	return path
+	fmt.Println(core.FormatWorktree(display))
 }
 
 // findFirstWorktree does a shallow scan to find any worktree in the repo directory.
@@ -408,34 +383,9 @@ func filterExistingWorktrees(worktrees []git.Worktree) []git.Worktree {
 	return existing
 }
 
-// buildStatusEmojis builds a string of status emoji indicators.
-func buildStatusEmojis(status git.WorktreeStatus) string {
-	var emojis []string
-	if status.Dirty {
-		emojis = append(emojis, "\033[31m✗\033[0m") // Red - urgent
-	}
-	if status.Ahead > 0 {
-		emojis = append(emojis, "\033[33m↑\033[0m") // Yellow - warning
-	}
-	if status.Behind > 0 {
-		emojis = append(emojis, "\033[36m↓\033[0m") // Cyan - informational
-	}
-	if status.Unmerged {
-		emojis = append(emojis, "\033[35m↕\033[0m") // Magenta - special state
-	}
-
-	result := ""
-	for i, emoji := range emojis {
-		if i > 0 {
-			result += " "
-		}
-		result += emoji
-	}
-	return result
-}
-
 // discoverAllSproutRepos discovers all sprout-managed repositories (legacy adapter).
 // Returns repositories in the old RepoWorktrees format for backward compatibility.
+// Used by: repair command
 func discoverAllSproutRepos() ([]RepoWorktrees, error) {
 	repos, err := collectAllRepos()
 	if err != nil {
