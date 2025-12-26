@@ -24,6 +24,8 @@ var (
 	ErrEmptyBranch           = errors.New("branch name cannot be empty")
 	ErrNilConfig             = errors.New("config must not be nil")
 	ErrUntrustedWithHooks    = errors.New("Repository not trusted. Cannot run hooks.\n\nTo trust this repository, run:\n  sprout trust")
+	ErrNoSproutWorktrees     = errors.New("no sprout-managed worktrees found")
+	ErrSelectionCancelled    = errors.New("selection cancelled")
 )
 
 // Action represents a single operation to perform.

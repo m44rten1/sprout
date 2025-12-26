@@ -57,4 +57,8 @@ type Effects interface {
 
 	// Path calculation
 	GetWorktreePath(repoPath, branch string) (string, error)
+
+	// Sprout paths
+	GetSproutRoot() (string, error)
+	GetWorktreeRoot(repoRoot string) (string, error)
 }

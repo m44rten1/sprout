@@ -32,6 +32,12 @@ type TestEffects struct {
 	WorktreePaths      map[string]string // branch -> path mapping
 	GetWorktreePathErr error
 
+	// Sprout paths
+	SproutRoot         string
+	WorktreeRoot       string
+	GetSproutRootErr   error
+	GetWorktreeRootErr error
+
 	// Error injection - set these to simulate failures
 	GetRepoRootErr         error
 	GetMainWorktreePathErr error
@@ -71,6 +77,8 @@ type TestEffects struct {
 	LocalBranchExistsCalls   int
 	RemoteBranchExistsCalls  int
 	GetWorktreePathCalls     int
+	GetSproutRootCalls       int
+	GetWorktreeRootCalls     int
 
 	// Call tracking (captured side effects and arguments)
 	ListWorktreesArgs         []string   // repoRoot args passed to ListWorktrees
@@ -88,6 +96,7 @@ type TestEffects struct {
 	LocalBranchExistsQueries  []BranchQuery
 	RemoteBranchExistsQueries []BranchQuery
 	GetWorktreePathQueries    []WorktreePathQuery
+	GetWorktreeRootArgs       []string // repoRoot args passed to GetWorktreeRoot
 }
 
 // GitCmd represents a recorded git command execution.
@@ -147,6 +156,9 @@ func NewTestEffects() *TestEffects {
 		LocalBranchExistsQueries:  []BranchQuery{},
 		RemoteBranchExistsQueries: []BranchQuery{},
 		GetWorktreePathQueries:    []WorktreePathQuery{},
+		GetWorktreeRootArgs:       []string{},
+		SproutRoot:                "/home/user/.local/share/sprout",
+		WorktreeRoot:              "/home/user/.local/share/sprout/test-12345678",
 	}
 }
 
@@ -348,4 +360,27 @@ func (t *TestEffects) GetWorktreePath(repoPath, branch string) (string, error) {
 	}
 	// Default: generate a simple path
 	return fmt.Sprintf("%s/worktrees/%s", repoPath, branch), nil
+}
+
+func (t *TestEffects) GetSproutRoot() (string, error) {
+	t.GetSproutRootCalls++
+	if t.GetSproutRootErr != nil {
+		return "", t.GetSproutRootErr
+	}
+	if t.SproutRoot == "" {
+		return "", fmt.Errorf("failed to get sprout root")
+	}
+	return t.SproutRoot, nil
+}
+
+func (t *TestEffects) GetWorktreeRoot(repoRoot string) (string, error) {
+	t.GetWorktreeRootCalls++
+	t.GetWorktreeRootArgs = append(t.GetWorktreeRootArgs, repoRoot)
+	if t.GetWorktreeRootErr != nil {
+		return "", t.GetWorktreeRootErr
+	}
+	if t.WorktreeRoot == "" {
+		return "", fmt.Errorf("failed to get worktree root")
+	}
+	return t.WorktreeRoot, nil
 }

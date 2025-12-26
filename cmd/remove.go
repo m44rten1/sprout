@@ -1,13 +1,12 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
 	"github.com/m44rten1/sprout/internal/core"
-	"github.com/m44rten1/sprout/internal/git"
-	"github.com/m44rten1/sprout/internal/sprout"
-	"github.com/m44rten1/sprout/internal/tui"
+	"github.com/m44rten1/sprout/internal/effects"
 
 	"github.com/spf13/cobra"
 )
@@ -22,21 +21,24 @@ var removeCmd = &cobra.Command{
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		repoRoot, err := git.GetRepoRoot()
+		// Use effects interface for consistency
+		fx := effects.NewRealEffects()
+
+		repoRoot, err := fx.GetRepoRoot()
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		worktrees, err := git.ListWorktrees(repoRoot)
+		worktrees, err := fx.ListWorktrees(repoRoot)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		// Filter to sprout worktrees
-		sproutRoot, err := sprout.GetSproutRoot()
+		sproutRoot, err := fx.GetWorktreeRoot(repoRoot)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
+
 		choices := core.FilterSproutWorktrees(worktrees, sproutRoot)
 
 		var completions []string
@@ -49,100 +51,120 @@ var removeCmd = &cobra.Command{
 		return completions, cobra.ShellCompDirectiveNoFileComp
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		repoRoot, err := git.GetRepoRoot()
+		fx := effects.NewRealEffects()
+
+		force, err := cmd.Flags().GetBool("force")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 
-		var targetPath string
-
-		if len(args) == 0 {
-			// Interactive mode
-			worktrees, err := git.ListWorktrees(repoRoot)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to list worktrees: %v\n", err)
-				os.Exit(1)
-			}
-
-			// Filter to sprout worktrees
-			sproutRoot, err := sprout.GetSproutRoot()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to get sprout root: %v\n", err)
-				os.Exit(1)
-			}
-			choices := core.FilterSproutWorktrees(worktrees, sproutRoot)
-
-			if len(choices) == 0 {
-				fmt.Println("No sprout-managed worktrees found.")
-				return
-			}
-
-			idx, err := tui.SelectOne(choices, func(wt git.Worktree) string {
-				branch := wt.Branch
-				if branch == "" {
-					branch = "(detached)"
-				}
-				return fmt.Sprintf("%-30s %s", branch, wt.Path)
-			}, nil)
-
-			if err != nil {
-				return
-			}
-			targetPath = choices[idx].Path
-
-		} else {
-			arg := args[0]
-			// Check if it's a path
-			if info, err := os.Stat(arg); err == nil && info.IsDir() {
-				targetPath = arg
-			} else {
-				// Assume it's a branch - search for it in worktrees
-				worktrees, err := git.ListWorktrees(repoRoot)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to list worktrees: %v\n", err)
-					os.Exit(1)
-				}
-
-				// Find matching sprout worktree by branch
-				sproutRoot, err := sprout.GetSproutRoot()
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to get sprout root: %v\n", err)
-					os.Exit(1)
-				}
-				var found bool
-				targetPath, found = core.FindWorktreeByBranch(worktrees, sproutRoot, arg)
-				if !found {
-					fmt.Fprintf(os.Stderr, "No sprout-managed worktree found for branch '%s'\n", arg)
-					os.Exit(1)
-				}
-			}
-		}
-
-		// Verify the target is under a sprout root
-		sproutRoot, err := sprout.GetSproutRoot()
+		// Build context
+		ctx, err := BuildRemoveContext(fx, args, force)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to get sprout root: %v\n", err)
-			os.Exit(1)
-		}
-		if !core.IsUnderSproutRoot(targetPath, sproutRoot) {
-			fmt.Fprintf(os.Stderr, "Refusing to remove non-sprout worktree: %s\n", targetPath)
+			// Handle specific errors with better UX
+			if errors.Is(err, core.ErrNoSproutWorktrees) {
+				fmt.Println("No sprout-managed worktrees found.")
+				os.Exit(1)
+			}
+			if errors.Is(err, core.ErrSelectionCancelled) {
+				// Silent exit for cancelled selection (user pressed Ctrl+C)
+				os.Exit(1)
+			}
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 
-		force, _ := cmd.Flags().GetBool("force")
+		// Plan
+		plan := core.PlanRemoveCommand(ctx)
 
-		if err := git.RemoveWorktree(repoRoot, targetPath, force); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to remove worktree: %v\n", err)
+		// Execute
+		if err := effects.ExecutePlan(plan, fx); err != nil {
+			if code, ok := effects.IsExit(err); ok {
+				os.Exit(code)
+			}
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
-		}
-		fmt.Printf("Removed worktree at %s\n", targetPath)
-
-		// Prune stale worktree references
-		if err := git.PruneWorktrees(repoRoot); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Failed to prune stale worktrees: %v\n", err)
 		}
 	},
+}
+
+// BuildRemoveContext gathers all inputs needed for the remove command.
+//
+// It handles three input modes:
+// - Interactive selection if no argument provided
+// - Branch name lookup (tries to match against worktree branches)
+// - Direct path (if argument is an existing file/directory)
+//
+// Path vs branch disambiguation: If the argument exists as a file/directory,
+// it's treated as a path; otherwise it's treated as a branch name. This means
+// a branch name that matches a file in CWD will be interpreted as a path.
+// This is acceptable for a worktree tool where explicit paths are uncommon.
+func BuildRemoveContext(fx effects.Effects, args []string, force bool) (core.RemoveContext, error) {
+	// Get repository root
+	repoRoot, err := fx.GetRepoRoot()
+	if err != nil {
+		return core.RemoveContext{}, fmt.Errorf("failed to get repository root: %w", err)
+	}
+
+	// Get sprout root
+	sproutRoot, err := fx.GetWorktreeRoot(repoRoot)
+	if err != nil {
+		return core.RemoveContext{}, fmt.Errorf("failed to get sprout root: %w", err)
+	}
+
+	// Get all worktrees
+	worktrees, err := fx.ListWorktrees(repoRoot)
+	if err != nil {
+		return core.RemoveContext{}, fmt.Errorf("failed to list worktrees: %w", err)
+	}
+
+	// Filter to sprout-managed worktrees
+	sproutWorktrees := core.FilterSproutWorktrees(worktrees, sproutRoot)
+
+	var targetPath string
+	var argProvided bool
+	var arg string
+
+	if len(args) == 0 {
+		// Interactive mode
+		if len(sproutWorktrees) == 0 {
+			return core.RemoveContext{}, core.ErrNoSproutWorktrees
+		}
+
+		idx, err := fx.SelectWorktree(sproutWorktrees)
+		if err != nil {
+			return core.RemoveContext{}, core.ErrSelectionCancelled
+		}
+		targetPath = sproutWorktrees[idx].Path
+
+	} else {
+		// Argument provided
+		argProvided = true
+		arg = args[0]
+
+		// Disambiguate: path (if exists) vs branch name
+		if fx.FileExists(arg) {
+			targetPath = arg
+		} else {
+			// Assume it's a branch - search for it in worktrees
+			var found bool
+			targetPath, found = core.FindWorktreeByBranch(worktrees, sproutRoot, arg)
+			if !found {
+				return core.RemoveContext{}, fmt.Errorf("no sprout-managed worktree found for branch '%s'", arg)
+			}
+		}
+	}
+
+	return core.RemoveContext{
+		ArgProvided: argProvided,
+		Arg:         arg,
+		RepoRoot:    repoRoot,
+		SproutRoot:  sproutRoot,
+		Worktrees:   worktrees,
+		TargetPath:  targetPath,
+		Force:       force,
+	}, nil
 }
 
 func init() {

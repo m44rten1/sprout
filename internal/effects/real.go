@@ -114,3 +114,11 @@ func (r *RealEffects) RemoteBranchExists(repoRoot, branch string) (bool, error) 
 func (r *RealEffects) GetWorktreePath(repoPath, branch string) (string, error) {
 	return sprout.GetWorktreePath(repoPath, branch)
 }
+
+func (r *RealEffects) GetSproutRoot() (string, error) {
+	return sprout.GetSproutRoot()
+}
+
+func (r *RealEffects) GetWorktreeRoot(repoRoot string) (string, error) {
+	return sprout.GetWorktreeRoot(repoRoot)
+}
