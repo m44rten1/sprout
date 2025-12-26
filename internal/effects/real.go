@@ -65,6 +65,10 @@ func (r *RealEffects) TrustRepo(repoRoot string) error {
 	return trust.TrustRepo(repoRoot)
 }
 
+func (r *RealEffects) UntrustRepo(repoRoot string) error {
+	return trust.UntrustRepo(repoRoot)
+}
+
 func (r *RealEffects) OpenEditor(path string) error {
 	return editor.Open(path)
 }

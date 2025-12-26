@@ -163,6 +163,12 @@ Hooks can execute arbitrary commands, so **you must explicitly trust each reposi
 sprout trust
 ```
 
+**Remove trust from a repository:**
+
+```bash
+sprout untrust
+```
+
 **View hook status:**
 
 ```bash

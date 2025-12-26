@@ -27,6 +27,7 @@ type Effects interface {
 	// Trust
 	IsTrusted(repoRoot string) (bool, error)
 	TrustRepo(repoRoot string) error
+	UntrustRepo(repoRoot string) error
 
 	// Editor
 	OpenEditor(path string) error

@@ -96,6 +96,12 @@ func executeAction(action core.Action, fx Effects) error {
 		}
 		return nil
 
+	case core.UntrustRepo:
+		if err := fx.UntrustRepo(a.RepoRoot); err != nil {
+			return fmt.Errorf("untrust repo %s: %w", a.RepoRoot, err)
+		}
+		return nil
+
 	case core.SelectInteractive:
 		// SelectInteractive is a planning-time artifact, not an executable action.
 		// Interactive selection should happen in the shell BEFORE plan generation.

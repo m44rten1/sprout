@@ -47,6 +47,7 @@ type TestEffects struct {
 	LoadConfigErr          error
 	IsTrustedErr           error
 	TrustRepoErr           error
+	UntrustRepoErr         error
 	OpenEditorErr          error
 	RunHooksErr            error
 	LocalBranchExistsErr   error
@@ -68,6 +69,7 @@ type TestEffects struct {
 	LoadConfigCalls          int
 	IsTrustedCalls           int
 	TrustRepoCalls           int
+	UntrustRepoCalls         int
 	OpenEditorCalls          int
 	PrintCalls               int
 	PrintErrCalls            int
@@ -87,6 +89,7 @@ type TestEffects struct {
 	LoadConfigMainArgs        []string   // mainPath args passed to LoadConfig
 	IsTrustedArgs             []string   // repoRoot args passed to IsTrusted
 	TrustRepoRepos            []string   // Repos that had TrustRepo called
+	UntrustRepoRepos          []string   // Repos that had UntrustRepo called
 	PrintedMsgs               []string   // Messages printed via Print
 	PrintedErrs               []string   // Messages printed via PrintErr
 	GitCommands               []GitCmd   // Git commands executed
@@ -266,6 +269,16 @@ func (t *TestEffects) TrustRepo(repoRoot string) error {
 		return t.TrustRepoErr
 	}
 	t.TrustedRepos[repoRoot] = true
+	return nil
+}
+
+func (t *TestEffects) UntrustRepo(repoRoot string) error {
+	t.UntrustRepoCalls++
+	t.UntrustRepoRepos = append(t.UntrustRepoRepos, repoRoot)
+	if t.UntrustRepoErr != nil {
+		return t.UntrustRepoErr
+	}
+	delete(t.TrustedRepos, repoRoot)
 	return nil
 }
 

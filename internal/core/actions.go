@@ -94,6 +94,13 @@ type TrustRepo struct {
 
 func (TrustRepo) isAction() {}
 
+// UntrustRepo removes trust from a repository.
+type UntrustRepo struct {
+	RepoRoot string
+}
+
+func (UntrustRepo) isAction() {}
+
 // SelectInteractive represents an interactive selection.
 // Note: Uses 'any' for flexibility, but this is intentionally "edge-only" - not
 // executed by the standard effects executor. Interactive prompts are handled in

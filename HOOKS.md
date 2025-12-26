@@ -64,23 +64,27 @@ hooks:
 #### `on_create`
 
 Runs automatically after creating a new worktree. Ideal for:
+
 - Installing dependencies (`npm ci`, `go mod download`)
 - Building the project (`npm run build`, `go build`)
 - Database migrations
 - Generating code or assets
 
 **Triggered by:**
+
 - `sprout add <branch>` (automatic, unless `--no-hooks` is used)
 
 #### `on_open`
 
 Runs automatically when opening a worktree. Ideal for:
+
 - Type checking (`npm run lint:types`, `go vet`)
 - Code generation (`npm run generate`, `go generate`)
 - Lightweight sync operations
 - Database migrations
 
 **Triggered by:**
+
 - `sprout open` (automatic, unless `--no-hooks` is used)
 
 ### Validation Rules
@@ -143,6 +147,7 @@ sprout add feat/new-feature
 Your editor opens immediately, then hooks run in the terminal. This allows you to start browsing code while dependencies install and builds complete.
 
 **Skip running hooks:**
+
 ```bash
 sprout add feat/new-feature --no-hooks
 ```
@@ -150,6 +155,7 @@ sprout add feat/new-feature --no-hooks
 Create the worktree without running hooks, even if `.sprout.yml` exists.
 
 **Skip opening the editor:**
+
 ```bash
 sprout add feat/new-feature --no-open
 ```
@@ -167,6 +173,7 @@ sprout open feat/bug-fix
 Your editor opens immediately, then hooks run in the terminal. You can start working while type-checking and code generation complete in the background.
 
 **Skip running hooks:**
+
 ```bash
 sprout open feat/bug-fix --no-hooks
 ```
@@ -185,6 +192,20 @@ sprout trust
 sprout trust /path/to/repo
 ```
 
+### `sprout untrust`
+
+Remove trust from a repository:
+
+```bash
+# Untrust current repo
+sprout untrust
+
+# Untrust specific repo
+sprout untrust /path/to/repo
+```
+
+This prevents hooks from running automatically while keeping your `.sprout.yml` configuration intact. You can re-enable hooks anytime by running `sprout trust` again.
+
 ### `sprout hooks`
 
 Display hook configuration status:
@@ -194,6 +215,7 @@ sprout hooks
 ```
 
 Shows:
+
 - Whether `.sprout.yml` exists
 - Trust status
 - Defined hooks
@@ -296,6 +318,7 @@ This copies the `.env` file from your repository root to each new worktree. Usef
 **Issue:** Commands don't execute when creating worktrees.
 
 **Solutions:**
+
 1. Check if repository is trusted: `sprout hooks`
 2. Trust the repository: `sprout trust`
 3. Verify `.sprout.yml` exists in repo root
@@ -307,10 +330,12 @@ This copies the `.env` file from your repository root to each new worktree. Usef
 **Issue:** A hook command exits with an error.
 
 **Behavior:**
+
 - Remaining commands in that hook are skipped
 - Error message displays the failed command and exit code
 
 **Solutions:**
+
 1. Review command syntax in `.sprout.yml`
 2. Ensure dependencies are available (npm, go, etc.)
 3. Check environment variables are set correctly
@@ -321,6 +346,7 @@ This copies the `.env` file from your repository root to each new worktree. Usef
 **Issue:** `failed to parse config file` error.
 
 **Solutions:**
+
 1. Validate YAML syntax at https://www.yamllint.com/
 2. Ensure proper indentation (2 spaces per level)
 3. Commands must be strings, not complex objects
@@ -334,6 +360,7 @@ This copies the `.env` file from your repository root to each new worktree. Usef
 Commands run via `sh -lc "<command>"` which loads your shell profile.
 
 **Solutions:**
+
 1. Ensure commands are in your PATH
 2. Use full paths: `/usr/local/bin/npm ci`
 3. Check shell profile (`.profile`, `.zshrc`) for PATH setup
