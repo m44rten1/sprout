@@ -221,14 +221,17 @@ Sprout automatically opens worktrees in your preferred editor. It checks in this
 **Examples:**
 
 ```bash
-# Use vim for sprout
-export SPROUT_EDITOR=vim
-
 # Use VS Code with wait flag
 export SPROUT_EDITOR="code --wait"
 
-# Use your system's default editor
-export EDITOR=nano
+# Use Cursor
+export SPROUT_EDITOR="cursor"
+
+# Use Zed
+export SPROUT_EDITOR="zed"
+
+# Use your system's default (macOS: TextEdit, Linux: xdg-open)
+unset SPROUT_EDITOR EDITOR
 ```
 
 ## 🧠 Philosophy
