@@ -16,9 +16,14 @@ var rootCmd = &cobra.Command{
 	Long:  `sprout is a lightweight Go CLI tool for managing Git worktrees.`,
 }
 
+var dryRunFlag bool
+
 func init() {
 	// Enable shell completion command
 	rootCmd.CompletionOptions.DisableDefaultCmd = false
+
+	// Add global --dry-run flag
+	rootCmd.PersistentFlags().BoolVar(&dryRunFlag, "dry-run", false, "Show what would be done without executing")
 
 	// Auto-repair worktrees before any command
 	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
@@ -29,6 +34,11 @@ func init() {
 
 		// Skip for commands that don't need worktree repair
 		if cmd.Name() == "completion" || cmd.Name() == "help" {
+			return
+		}
+
+		// Skip auto-repair in dry-run mode (no side effects)
+		if dryRunFlag {
 			return
 		}
 

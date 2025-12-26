@@ -73,6 +73,14 @@ Hooks can execute arbitrary commands on your system.`,
 
 		// Plan and execute
 		plan := core.PlanTrustCommand(ctx)
+
+		// Dry-run mode: print plan instead of executing
+		if dryRunFlag {
+			fmt.Println(core.FormatPlan(plan))
+			return
+		}
+
+		// Execute plan
 		if err := effects.ExecutePlan(plan, fx); err != nil {
 			if code, ok := effects.IsExit(err); ok {
 				os.Exit(code)

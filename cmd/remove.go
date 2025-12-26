@@ -78,8 +78,14 @@ var removeCmd = &cobra.Command{
 		// Plan
 		plan := core.PlanRemoveCommand(ctx)
 
-		// Execute
-		if err := effects.ExecutePlan(plan, fx); err != nil {
+		// Dry-run mode: print plan instead of executing
+		if dryRunFlag {
+			fmt.Println(core.FormatPlan(plan))
+			return
+		}
+
+		// Execute plan
+		if err := effects.ExecutePlan(plan, fx); err != nil{
 			if code, ok := effects.IsExit(err); ok {
 				os.Exit(code)
 			}

@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	dryRunFlag bool
+	completionDryRunFlag bool
 )
 
 var completionInstallCmd = &cobra.Command{
@@ -28,7 +28,7 @@ var completionInstallCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(completionInstallCmd)
-	completionInstallCmd.Flags().BoolVar(&dryRunFlag, "dry-run", false, "Show what would be added without modifying files")
+	completionInstallCmd.Flags().BoolVar(&completionDryRunFlag, "dry-run", false, "Show what would be added without modifying files")
 }
 
 func installCompletion() error {
@@ -57,7 +57,7 @@ func installCompletion() error {
 	// Generate the completion setup lines
 	setupLines := generateSetupLines(shell)
 
-	if dryRunFlag {
+	if completionDryRunFlag {
 		fmt.Println("Dry run mode - would add the following to", configFile)
 		fmt.Println(strings.Repeat("-", 60))
 		fmt.Println(setupLines)
