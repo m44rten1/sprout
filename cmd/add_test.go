@@ -491,7 +491,7 @@ func TestAddCommand_EndToEnd(t *testing.T) {
 				// Hooks executed with correct data
 				require.Len(t, fx.RunHooksInvocations, 1)
 				hookCall := fx.RunHooksInvocations[0]
-				assert.Equal(t, "on_create", hookCall.HookType)
+				assert.Equal(t, core.HookTypeOnCreate, hookCall.HookType)
 				assert.Equal(t, []string{"npm install", "npm test"}, hookCall.Commands)
 				assert.Equal(t, "/test/repo-sprout/feature", hookCall.WorktreePath)
 				assert.Equal(t, "/test/repo", hookCall.RepoRoot)

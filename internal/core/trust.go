@@ -1,11 +1,8 @@
 package core
 
 import (
-	"errors"
 	"fmt"
 )
-
-var ErrNoRepoRoot = errors.New("no repository root provided")
 
 // TrustContext contains all inputs needed to plan the trust command.
 type TrustContext struct {

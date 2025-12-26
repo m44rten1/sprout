@@ -76,6 +76,7 @@ func TestPlanAddCommand(t *testing.T) {
 			ctx: AddContext{
 				Branch:             "feature",
 				RepoRoot:           "/repo",
+				MainWorktreePath:   "/repo",
 				WorktreePath:       "/sprout/feature",
 				WorktreeExists:     false,
 				LocalBranchExists:  false,
@@ -109,7 +110,7 @@ func TestPlanAddCommand(t *testing.T) {
 
 				assert.IsType(t, RunHooks{}, actions[5], "should run hooks")
 				hooks := actions[5].(RunHooks)
-				assert.Equal(t, "on_create", hooks.Type)
+				assert.Equal(t, HookTypeOnCreate, hooks.Type)
 				assert.Equal(t, []string{"npm install"}, hooks.Commands)
 				assert.Equal(t, "/sprout/feature", hooks.Path)
 			},
@@ -119,6 +120,7 @@ func TestPlanAddCommand(t *testing.T) {
 			ctx: AddContext{
 				Branch:             "feature",
 				RepoRoot:           "/repo",
+				MainWorktreePath:   "/repo",
 				WorktreePath:       "/sprout/feature",
 				WorktreeExists:     false,
 				LocalBranchExists:  false,
@@ -142,10 +144,38 @@ func TestPlanAddCommand(t *testing.T) {
 			},
 		},
 		{
+			name: "new branch with hooks but empty main worktree path",
+			ctx: AddContext{
+				Branch:             "feature",
+				RepoRoot:           "/repo",
+				MainWorktreePath:   "", // Empty - required for hooks
+				WorktreePath:       "/sprout/feature",
+				WorktreeExists:     false,
+				LocalBranchExists:  false,
+				RemoteBranchExists: false,
+				HasOriginMain:      true,
+				Config:             &config.Config{Hooks: config.HooksConfig{OnCreate: []string{"npm install"}}},
+				IsTrusted:          true,
+				NoHooks:            false,
+				NoOpen:             false,
+			},
+			wantActions: 2,
+			checkActions: func(t *testing.T, actions []Action) {
+				assert.IsType(t, PrintError{}, actions[0])
+				err := actions[0].(PrintError)
+				assert.Equal(t, ErrEmptyMainWorktreePath.Error(), err.Msg)
+
+				assert.IsType(t, Exit{}, actions[1])
+				exit := actions[1].(Exit)
+				assert.Equal(t, 1, exit.Code)
+			},
+		},
+		{
 			name: "new branch with hooks and --no-open - runs hooks without editor",
 			ctx: AddContext{
 				Branch:             "feature",
 				RepoRoot:           "/repo",
+				MainWorktreePath:   "/repo",
 				WorktreePath:       "/sprout/feature",
 				WorktreeExists:     false,
 				LocalBranchExists:  false,
@@ -165,7 +195,7 @@ func TestPlanAddCommand(t *testing.T) {
 				assert.IsType(t, RunHooks{}, actions[4], "should run hooks")
 
 				hooks := actions[4].(RunHooks)
-				assert.Equal(t, "on_create", hooks.Type)
+				assert.Equal(t, HookTypeOnCreate, hooks.Type)
 				assert.Equal(t, []string{"npm install"}, hooks.Commands)
 				assert.Equal(t, "/sprout/feature", hooks.Path)
 

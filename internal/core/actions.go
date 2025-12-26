@@ -1,6 +1,30 @@
 package core
 
-import "os"
+import (
+	"errors"
+	"os"
+)
+
+// HookType represents the type of hook to execute.
+type HookType string
+
+// Hook type constants for RunHooks action
+const (
+	HookTypeOnCreate HookType = "on_create"
+	HookTypeOnOpen   HookType = "on_open"
+)
+
+// Common error variables used across commands
+var (
+	ErrNoRepoRoot            = errors.New("no repository root provided")
+	ErrEmptyRepoRoot         = ErrNoRepoRoot // Alias for consistency across commands
+	ErrEmptyTargetPath       = errors.New("target path cannot be empty")
+	ErrEmptyWorktreePath     = errors.New("worktree path cannot be empty")
+	ErrEmptyMainWorktreePath = errors.New("main worktree path cannot be empty")
+	ErrEmptyBranch           = errors.New("branch name cannot be empty")
+	ErrNilConfig             = errors.New("config must not be nil")
+	ErrUntrustedWithHooks    = errors.New("Repository not trusted. Cannot run hooks.\n\nTo trust this repository, run:\n  sprout trust")
+)
 
 // Action represents a single operation to perform.
 // This is a sum type implemented via interface for type safety.
@@ -52,7 +76,7 @@ func (OpenEditor) isAction() {}
 
 // RunHooks executes hook commands in the specified directory.
 type RunHooks struct {
-	Type             string   // "on_create", "on_remove", etc.
+	Type             HookType // HookTypeOnCreate, HookTypeOnOpen, etc.
 	Commands         []string // Shell commands to execute
 	Path             string   // Working directory for hooks (worktree path)
 	RepoRoot         string   // Repository root
@@ -68,8 +92,11 @@ type TrustRepo struct {
 
 func (TrustRepo) isAction() {}
 
-// SelectInteractive represents an interactive selection (kept at edge).
-// This might be split into specific types later (SelectBranch, SelectWorktree).
+// SelectInteractive represents an interactive selection.
+// Note: Uses 'any' for flexibility, but this is intentionally "edge-only" - not
+// executed by the standard effects executor. Interactive prompts are handled in
+// the imperative shell (cmd layer) before planning, not as part of plan execution.
+// If this pattern becomes more common, consider concrete types like SelectWorktree.
 type SelectInteractive struct {
 	Items       []any
 	DisplayFunc func(any) string

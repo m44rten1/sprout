@@ -85,7 +85,7 @@ func executeAction(action core.Action, fx Effects) error {
 		return nil
 
 	case core.RunHooks:
-		if err := fx.RunHooks(a.RepoRoot, a.Path, a.MainWorktreePath, a.Commands, a.Type); err != nil {
+		if err := fx.RunHooks(a.RepoRoot, a.Path, a.MainWorktreePath, a.Commands, string(a.Type)); err != nil {
 			return fmt.Errorf("run %s hooks: %w", a.Type, err)
 		}
 		return nil

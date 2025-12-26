@@ -3,14 +3,12 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
-	"github.com/m44rten1/sprout/internal/config"
 	"github.com/m44rten1/sprout/internal/core"
-	"github.com/m44rten1/sprout/internal/editor"
+	"github.com/m44rten1/sprout/internal/effects"
 	"github.com/m44rten1/sprout/internal/git"
-	"github.com/m44rten1/sprout/internal/hooks"
 	"github.com/m44rten1/sprout/internal/sprout"
-	"github.com/m44rten1/sprout/internal/tui"
 
 	"github.com/spf13/cobra"
 )
@@ -49,133 +47,120 @@ var openCmd = &cobra.Command{
 		var completions []string
 		for _, wt := range choices {
 			if wt.Branch != "" {
-				completions = append(completions, wt.Branch)
+				// Filter by what user has typed so far for smarter completion
+				if toComplete == "" || strings.HasPrefix(wt.Branch, toComplete) {
+					completions = append(completions, wt.Branch)
+				}
 			}
 		}
 
 		return completions, cobra.ShellCompDirectiveNoFileComp
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		repoRoot, err := git.GetRepoRoot()
+		fx := effects.NewRealEffects()
+
+		ctx, err := BuildOpenContext(fx, args, openNoHooksFlag)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 
-		var targetPath string
-
-		if len(args) == 0 {
-			// Interactive mode
-			worktrees, err := git.ListWorktrees(repoRoot)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to list worktrees: %v\n", err)
-				os.Exit(1)
+		plan := core.PlanOpenCommand(ctx)
+		if err := effects.ExecutePlan(plan, fx); err != nil {
+			if code, ok := effects.IsExit(err); ok {
+				os.Exit(code)
 			}
-
-			// Filter to sprout worktrees
-			sproutRoot, err := sprout.GetSproutRoot()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to get sprout root: %v\n", err)
-				os.Exit(1)
-			}
-			choices := core.FilterSproutWorktrees(worktrees, sproutRoot)
-
-			if len(choices) == 0 {
-				fmt.Println("No sprout-managed worktrees found.")
-				return
-			}
-
-			idx, err := tui.SelectOne(choices, func(wt git.Worktree) string {
-				branch := wt.Branch
-				if branch == "" {
-					branch = "(detached)"
-				}
-				return fmt.Sprintf("%-30s %s", branch, wt.Path)
-			}, nil)
-
-			if err != nil {
-				// Cancelled or error
-				return
-			}
-			targetPath = choices[idx].Path
-
-		} else {
-			arg := args[0]
-			// Check if it's a path
-			if info, err := os.Stat(arg); err == nil && info.IsDir() {
-				targetPath = arg
-			} else {
-				// Assume it's a branch - search for it in worktrees
-				worktrees, err := git.ListWorktrees(repoRoot)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to list worktrees: %v\n", err)
-					os.Exit(1)
-				}
-
-				// Find matching sprout worktree by branch
-				sproutRoot, err := sprout.GetSproutRoot()
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to get sprout root: %v\n", err)
-					os.Exit(1)
-				}
-				var found bool
-				targetPath, found = core.FindWorktreeByBranch(worktrees, sproutRoot, arg)
-				if !found {
-					fmt.Fprintf(os.Stderr, "No sprout-managed worktree found for branch '%s'\n", arg)
-					os.Exit(1)
-				}
-			}
-		}
-
-		// Get main worktree path for config loading
-		mainWorktreePath, err := git.GetMainWorktreePath()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to get main worktree path: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
-		}
-
-		// Check if .sprout.yml exists and has on_open hooks
-		cfg, err := config.Load(repoRoot, mainWorktreePath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
-			os.Exit(1)
-		}
-
-		shouldRunHooks := cfg.HasOpenHooks() && !openNoHooksFlag
-
-		// If hooks should run, verify repo is trusted before opening
-		if shouldRunHooks {
-			untrusted, err := hooks.CheckAndPrintUntrusted(repoRoot, mainWorktreePath)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to check trust status: %v\n", err)
-				os.Exit(1)
-			}
-
-			if untrusted {
-				// Hooks exist but repo is not trusted - abort
-				os.Exit(1)
-			}
-		}
-
-		// Open editor first, then run hooks
-		// This allows user to start browsing code while hooks run
-		if err := editor.Open(targetPath); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to open editor: %v\n", err)
-			os.Exit(1)
-		}
-
-		// Run on_open hooks automatically if they exist and repo is trusted
-		if shouldRunHooks {
-			if err := hooks.RunHooks(repoRoot, targetPath, mainWorktreePath, hooks.OnOpen); err != nil {
-				if _, ok := err.(*hooks.UntrustedError); ok {
-					hooks.PrintUntrustedMessage(mainWorktreePath)
-				} else {
-					fmt.Fprintf(os.Stderr, "Error running hooks: %v\n", err)
-					os.Exit(1)
-				}
-			}
 		}
 	},
+}
+
+// BuildOpenContext gathers all inputs needed to plan the open command.
+// It handles interactive selection if no argument is provided.
+func BuildOpenContext(fx effects.Effects, args []string, noHooks bool) (core.OpenContext, error) {
+	// Get repo root
+	repoRoot, err := fx.GetRepoRoot()
+	if err != nil {
+		return core.OpenContext{}, fmt.Errorf("not a git repository: %w", err)
+	}
+
+	// Get main worktree path for config loading and hooks
+	mainWorktreePath, err := fx.GetMainWorktreePath()
+	if err != nil {
+		return core.OpenContext{}, fmt.Errorf("failed to get main worktree: %w", err)
+	}
+
+	// Get sprout root once - used for filtering worktrees
+	sproutRoot, err := sprout.GetSproutRoot()
+	if err != nil {
+		return core.OpenContext{}, fmt.Errorf("failed to get sprout root: %w", err)
+	}
+
+	var targetPath string
+
+	if len(args) == 0 {
+		// Interactive mode: select from sprout worktrees
+		worktrees, err := fx.ListWorktrees(repoRoot)
+		if err != nil {
+			return core.OpenContext{}, fmt.Errorf("failed to list worktrees: %w", err)
+		}
+
+		choices := core.FilterSproutWorktrees(worktrees, sproutRoot)
+
+		if len(choices) == 0 {
+			return core.OpenContext{}, fmt.Errorf(core.MsgNoSproutWorktrees)
+		}
+
+		idx, err := fx.SelectWorktree(choices)
+		if err != nil {
+			return core.OpenContext{}, fmt.Errorf("selection cancelled: %w", err)
+		}
+
+		targetPath = choices[idx].Path
+	} else {
+		arg := args[0]
+		// Check if it's a path (paths take precedence over branch names)
+		if fx.FileExists(arg) {
+			targetPath = arg
+		} else {
+			// Assume it's a branch - search for it in worktrees
+			worktrees, err := fx.ListWorktrees(repoRoot)
+			if err != nil {
+				return core.OpenContext{}, fmt.Errorf("failed to list worktrees: %w", err)
+			}
+
+			var found bool
+			targetPath, found = core.FindWorktreeByBranch(worktrees, sproutRoot, arg)
+			if !found {
+				return core.OpenContext{}, fmt.Errorf("no sprout-managed worktree found for branch '%s'", arg)
+			}
+		}
+	}
+
+	// Load config
+	cfg, err := fx.LoadConfig(repoRoot, mainWorktreePath)
+	if err != nil {
+		return core.OpenContext{}, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Check trust status (only matters if hooks will run)
+	isTrusted := false
+	if cfg.HasOpenHooks() && !noHooks {
+		isTrusted, err = fx.IsTrusted(mainWorktreePath)
+		if err != nil {
+			return core.OpenContext{}, fmt.Errorf("failed to check trust status: %w", err)
+		}
+	}
+
+	return core.OpenContext{
+		TargetPath:       targetPath,
+		RepoRoot:         repoRoot,
+		MainWorktreePath: mainWorktreePath,
+		Config:           cfg,
+		IsTrusted:        isTrusted,
+		NoHooks:          noHooks,
+	}, nil
 }
 
 func init() {

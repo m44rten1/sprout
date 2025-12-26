@@ -9,14 +9,9 @@ import (
 
 // Message constants for consistent UX
 const (
-	msgWorktreeExists     = "Worktree already exists at %s"
-	msgCreatingWorktree   = "Creating worktree for %s at %s..."
-	msgWorktreeCreated    = "Worktree created!"
-	errUntrustedWithHooks = "Repository not trusted. Cannot run hooks.\n\nTo trust this repository, run:\n  sprout trust"
-	errEmptyRepoRoot      = "repository root cannot be empty"
-	errEmptyWorktreePath  = "worktree path cannot be empty"
-	errEmptyBranch        = "branch name cannot be empty"
-	errNilConfig          = "config must not be nil"
+	msgWorktreeExists   = "Worktree already exists at %s"
+	msgCreatingWorktree = "Creating worktree for %s at %s..."
+	msgWorktreeCreated  = "Worktree created!"
 )
 
 // AddContext contains all inputs needed to plan the add command.
@@ -46,16 +41,16 @@ type AddContext struct {
 func PlanAddCommand(ctx AddContext) Plan {
 	// Validate inputs
 	if ctx.RepoRoot == "" {
-		return errorPlan(errEmptyRepoRoot)
+		return errorPlan(ErrEmptyRepoRoot)
 	}
 	if ctx.WorktreePath == "" {
-		return errorPlan(errEmptyWorktreePath)
+		return errorPlan(ErrEmptyWorktreePath)
 	}
 	if ctx.Branch == "" {
-		return errorPlan(errEmptyBranch)
+		return errorPlan(ErrEmptyBranch)
 	}
 	if ctx.Config == nil {
-		return errorPlan(errNilConfig)
+		return errorPlan(ErrNilConfig)
 	}
 
 	// If worktree already exists, optionally open it (respecting NoOpen flag)
@@ -71,8 +66,13 @@ func PlanAddCommand(ctx AddContext) Plan {
 
 	// Check trust requirements before creating worktree
 	shouldRunHooks := ctx.Config.HasCreateHooks() && !ctx.NoHooks
-	if shouldRunHooks && !ctx.IsTrusted {
-		return errorPlan(errUntrustedWithHooks)
+	if shouldRunHooks {
+		if ctx.MainWorktreePath == "" {
+			return errorPlan(ErrEmptyMainWorktreePath)
+		}
+		if !ctx.IsTrusted {
+			return errorPlan(ErrUntrustedWithHooks)
+		}
 	}
 
 	// Build action sequence
@@ -97,7 +97,7 @@ func PlanAddCommand(ctx AddContext) Plan {
 			actions = append(actions, OpenEditor{Path: ctx.WorktreePath})
 		}
 		actions = append(actions, RunHooks{
-			Type:             "on_create",
+			Type:             HookTypeOnCreate,
 			Commands:         ctx.Config.Hooks.OnCreate,
 			Path:             ctx.WorktreePath,
 			RepoRoot:         ctx.RepoRoot,
@@ -112,9 +112,9 @@ func PlanAddCommand(ctx AddContext) Plan {
 }
 
 // errorPlan creates a plan that prints an error and exits.
-func errorPlan(msg string) Plan {
+func errorPlan(err error) Plan {
 	return Plan{Actions: []Action{
-		PrintError{Msg: msg},
+		PrintError{Msg: err.Error()},
 		Exit{Code: 1},
 	}}
 }

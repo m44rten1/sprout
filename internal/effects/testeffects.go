@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/m44rten1/sprout/internal/config"
+	"github.com/m44rten1/sprout/internal/core"
 	"github.com/m44rten1/sprout/internal/git"
 )
 
@@ -72,19 +73,19 @@ type TestEffects struct {
 	GetWorktreePathCalls     int
 
 	// Call tracking (captured side effects and arguments)
-	ListWorktreesArgs        []string   // repoRoot args passed to ListWorktrees
-	ListBranchesArgs         []string   // repoRoot args passed to ListBranches
-	LoadConfigCurrentArgs    []string   // currentPath args passed to LoadConfig
-	LoadConfigMainArgs       []string   // mainPath args passed to LoadConfig
-	IsTrustedArgs            []string   // repoRoot args passed to IsTrusted
-	TrustRepoRepos           []string   // Repos that had TrustRepo called
-	PrintedMsgs              []string   // Messages printed via Print
-	PrintedErrs              []string   // Messages printed via PrintErr
-	GitCommands              []GitCmd   // Git commands executed
-	OpenedPaths              []string   // Paths opened in editor
-	CreatedDirs              []string   // Directories created via MkdirAll
-	RunHooksInvocations      []HookCall // Hooks that were run
-	LocalBranchExistsQueries []BranchQuery
+	ListWorktreesArgs         []string   // repoRoot args passed to ListWorktrees
+	ListBranchesArgs          []string   // repoRoot args passed to ListBranches
+	LoadConfigCurrentArgs     []string   // currentPath args passed to LoadConfig
+	LoadConfigMainArgs        []string   // mainPath args passed to LoadConfig
+	IsTrustedArgs             []string   // repoRoot args passed to IsTrusted
+	TrustRepoRepos            []string   // Repos that had TrustRepo called
+	PrintedMsgs               []string   // Messages printed via Print
+	PrintedErrs               []string   // Messages printed via PrintErr
+	GitCommands               []GitCmd   // Git commands executed
+	OpenedPaths               []string   // Paths opened in editor
+	CreatedDirs               []string   // Directories created via MkdirAll
+	RunHooksInvocations       []HookCall // Hooks that were run
+	LocalBranchExistsQueries  []BranchQuery
 	RemoteBranchExistsQueries []BranchQuery
 	GetWorktreePathQueries    []WorktreePathQuery
 }
@@ -97,11 +98,11 @@ type GitCmd struct {
 
 // HookCall represents a recorded hook execution.
 type HookCall struct {
-	RepoRoot           string
-	WorktreePath       string
-	MainWorktreePath   string
-	Commands           []string
-	HookType           string
+	RepoRoot         string
+	WorktreePath     string
+	MainWorktreePath string
+	Commands         []string
+	HookType         core.HookType
 }
 
 // BranchQuery represents a branch existence check.
@@ -304,7 +305,7 @@ func (t *TestEffects) RunHooks(repoRoot, worktreePath, mainWorktreePath string, 
 		WorktreePath:     worktreePath,
 		MainWorktreePath: mainWorktreePath,
 		Commands:         commands,
-		HookType:         hookType,
+		HookType:         core.HookType(hookType),
 	})
 	return t.RunHooksErr
 }
