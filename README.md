@@ -128,25 +128,6 @@ Output includes:
 
 Clean worktrees show no indicators. Multiple indicators can appear together (e.g., 🔴🔀).
 
-### Repair worktrees
-
-Fix git metadata for moved worktrees.
-
-```bash
-sprout repair
-```
-
-If you've moved your sprout directory (e.g., from `~/.sprout` to `~/.local/share/sprout`), git's internal metadata may become stale. This command runs `git worktree repair` on all discovered repositories to fix the references.
-
-**Also prune stale references:**
-
-```bash
-sprout repair --prune
-```
-
-⚠️ **Note:** Always run `sprout repair` first without `--prune` to fix moved worktrees. Only use `--prune` after verifying the repair worked, as pruning will remove metadata for worktrees git can't find.
-
-Note: `sprout remove` automatically prunes stale worktree references after removal.
 
 ## 🪝 Project Hooks
 
@@ -233,6 +214,16 @@ Your main repo folder should be for your main repo. Not a graveyard of 50 abando
 It's like `virtualenv` but for your entire codebase.
 
 Sprout follows the XDG Base Directory specification, storing worktrees in `~/.local/share/sprout` by default (or `$XDG_DATA_HOME/sprout` if that environment variable is set).
+
+### Auto-Repair
+
+Sprout automatically maintains worktree health by running `git worktree repair` before each command. This happens silently in the background, so you never have to worry about moved directories or stale metadata.
+
+If you need to manually repair worktrees, you can run:
+
+```bash
+cd <repository> && git worktree repair
+```
 
 ## 🤝 Contributing
 

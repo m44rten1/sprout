@@ -382,32 +382,3 @@ func filterExistingWorktrees(worktrees []git.Worktree) []git.Worktree {
 	}
 	return existing
 }
-
-// discoverAllSproutRepos discovers all sprout-managed repositories (legacy adapter).
-// Returns repositories in the old RepoWorktrees format for backward compatibility.
-// Used by: repair command
-func discoverAllSproutRepos() ([]RepoWorktrees, error) {
-	repos, err := collectAllRepos()
-	if err != nil {
-		return nil, err
-	}
-
-	// Convert new format to legacy format
-	legacyRepos := make([]RepoWorktrees, len(repos))
-	for i, repo := range repos {
-		// Extract only sprout worktrees (skip main)
-		sproutWorktrees := make([]git.Worktree, 0, len(repo.Worktrees)-1)
-		for _, wt := range repo.Worktrees {
-			if !wt.IsMain {
-				sproutWorktrees = append(sproutWorktrees, wt.Worktree)
-			}
-		}
-
-		legacyRepos[i] = RepoWorktrees{
-			RepoRoot:  repo.MainPath,
-			Worktrees: sproutWorktrees,
-		}
-	}
-
-	return legacyRepos, nil
-}
