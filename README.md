@@ -208,6 +208,29 @@ sprout open feat/bug-fix --no-hooks
 # Editor opens, no hooks run
 ```
 
+## ⚙️ Configuration
+
+### Editor Selection
+
+Sprout automatically opens worktrees in your preferred editor. It checks in this order:
+
+1. **`$SPROUT_EDITOR`** - sprout-specific override
+2. **`$EDITOR`** - standard Unix convention
+3. **Platform defaults** - Cursor, VS Code, or system default
+
+**Examples:**
+
+```bash
+# Use vim for sprout
+export SPROUT_EDITOR=vim
+
+# Use VS Code with wait flag
+export SPROUT_EDITOR="code --wait"
+
+# Use your system's default editor
+export EDITOR=nano
+```
+
 ## 🧠 Philosophy
 
 Your main repo folder should be for your main repo. Not a graveyard of 50 abandoned feature branches.

@@ -604,14 +604,24 @@ Always run `sprout repair` WITHOUT `--prune` first when dealing with moved workt
 
 ## Editor integration
 
-When opening a worktree (via `sprout open` or after `sprout add`), sprout attempts to open an editor in this order:
+When opening a worktree (via `sprout open` or after `sprout add`), sprout opens an editor with the following priority:
 
-1. Use a configured editor command if present (future config, e.g. `$SPROUT_EDITOR` or config file)
-2. Platform-aware defaults, e.g. on macOS:
-   - `open -a "Cursor" <path>`
-   - fallback: `cursor <path>`
-   - fallback: `code <path>`
-   - fallback: `open <path>`
+1. **`$SPROUT_EDITOR`** - sprout-specific editor override (e.g., `code --wait`)
+2. **`$EDITOR`** - standard Unix editor convention (e.g., `vim`, `nano`)
+3. **Platform-aware defaults**:
+   - macOS:
+     - `open -a "Cursor" <path>`
+     - fallback: `cursor <path>`
+     - fallback: `code <path>`
+     - fallback: `open <path>`
+   - Linux:
+     - `cursor <path>`
+     - fallback: `code <path>`
+     - fallback: `xdg-open <path>`
+   - Windows:
+     - `cursor <path>`
+     - fallback: `code <path>`
+     - fallback: `cmd /C start <path>`
 
 All editor spawning is non-blocking from the CLI perspective.
 
