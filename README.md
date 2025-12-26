@@ -128,7 +128,6 @@ Output includes:
 
 Clean worktrees show no indicators. Multiple indicators can appear together (e.g., 🔴🔀).
 
-
 ## 🪝 Project Hooks
 
 Sprout supports project-specific hooks that automate setup and sync tasks. Perfect for ensuring your worktrees are always ready to work with.
@@ -228,3 +227,19 @@ cd <repository> && git worktree repair
 ## 🤝 Contributing
 
 Found a bug? Want to add more fertilizer? Open an issue or a PR!
+
+---
+
+### Architecture
+
+Sprout follows the **"Functional Core, Imperative Shell"** pattern, separating pure business logic from side effects. This makes the codebase highly testable and maintainable.
+
+📖 **[Read the architecture guide →](docs/ARCHITECTURE.md)**
+
+Key features of the architecture:
+
+- **Pure functions** for all business logic (easy to test, no mocks needed)
+- **Effects interface** for explicit side effect management
+- **Action/Plan pattern** for separating planning from execution
+- **Dry-run mode** built into all commands (`--dry-run` flag)
+- **Comprehensive test coverage** with fast, reliable tests

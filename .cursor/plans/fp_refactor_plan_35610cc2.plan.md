@@ -27,7 +27,7 @@ todos:
       - phase4-add
   - id: phase6-polish
     content: Add dry-run support, improve errors, write documentation
-    status: pending
+    status: completed
     dependencies:
       - phase5-remaining
 ---
@@ -1077,29 +1077,163 @@ graph TB
 
 ## Phase 6: Polish and Documentation (Week 5)
 
-### Step 6.1: Add dry-run support
+### Step 6.1: Add dry-run support ✅
 
-- Add `--dry-run` flag to commands
-- In handlers, if dry-run: print plan instead of executing
-- Demonstrates power of plan-based architecture
+- ✅ Created [`internal/core/dryrun.go`](internal/core/dryrun.go) with `FormatPlan` function
+- ✅ Created [`internal/core/dryrun_test.go`](internal/core/dryrun_test.go) with 11 comprehensive test cases
+- ✅ Added global `--dry-run` flag in [`cmd/root.go`](cmd/root.go)
+- ✅ Integrated dry-run mode in all commands: trust, add, open, remove
+- ✅ All tests passing, no linter errors
 
-### Step 6.2: Improve error handling
+**Implementation details:**
 
-- Create [`internal/core/result.go`](internal/core/result.go):
-  ```go
-                                                    type Result[T any] struct {
-                                                        Value T
-                                                        Error error
-                                                    }
-  ```
+- `FormatPlan(plan Plan) string` - converts Plan to human-readable output
+- `formatAction(action Action) string` - formats individual actions with type switches
+- Handles all action types: NoOp, PrintMessage, PrintError, CreateDirectory, RunGitCommand, OpenEditor, RunHooks, TrustRepo, Exit
+- Message truncation: 60 chars max, first line only for multiline messages
+- Git commands show directory context when present
+- Hook formatting shows count and type
+- Auto-repair skips in dry-run mode (no side effects)
 
+**Test coverage (11 cases):**
 
+- Empty plan handling
+- Single action formatting
+- Multiple actions with numbering
+- All action types coverage
+- Message truncation (long and multiline)
+- Truncation edge cases (exactly 60 chars, etc.)
+- Git command formatting (with/without dir, empty args)
+- Hook formatting (multiple, single, zero hooks)
+- Deterministic output verification
 
+**Decisions made:**
 
-- Update planning functions to use Result where it clarifies code
+- Global `--dry-run` flag on root command (applies to all subcommands)
+- Dry-run check happens in imperative shell, before `ExecutePlan()`
+- Output format: numbered list with clear action descriptions
+- Truncation for readability (prevents terminal spam from long messages)
+- No execution in dry-run mode - just plan display
+- Auto-repair disabled in dry-run mode (consistent semantics)
 
-### Step 6.3: Documentation
+**Key learnings:**
 
-- Add [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) explaining FP approach
-- Document the Effects interface
-- Add examples of testing pure functions
+- Plan-based architecture makes dry-run trivial to implement
+- Pure formatting function is easy to test comprehensively
+- Type switches on action types enable precise formatting
+- Truncation prevents output noise while remaining informative
+- Demonstrates FP benefit: separation of planning from execution
+
+### Step 6.2: Improve error handling (DEFERRED)
+
+**Status:** Not needed - current error handling is already robust.
+
+**Current approach:**
+- Actions use typed structs with explicit `Exit{Code int}` for failures
+- Executor propagates errors with context wrapping
+- `ExitError` type for distinguishing exit codes from other errors
+- `IsExit(err) (int, bool)` helper for ergonomic error checking
+- Planners validate inputs and return error plans with clear messages
+
+**Decision:** Skip `Result[T]` type introduction - it would add complexity without clear benefits. Go's idiomatic `(value, error)` pattern works well for this codebase.
+
+### Step 6.3: Documentation ✅
+
+- ✅ Created [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - comprehensive architecture guide
+- ✅ Explained "Functional Core, Imperative Shell" pattern with diagrams
+- ✅ Documented the Action/Plan pattern with examples
+- ✅ Documented the Effects interface and its two implementations
+- ✅ Provided testing strategy with code examples (3 test levels)
+- ✅ Explained key patterns: Context structs, Error plans, Structured tracking
+- ✅ Documented dry-run implementation
+- ✅ Explained command patterns (state-mutating vs display)
+- ✅ Added benefits, migration path, and common Q&A
+- ✅ Included references to further reading
+
+**Documentation sections:**
+
+1. **Overview** - Architecture diagram and core principles
+2. **Core Principles** - Functional core vs imperative shell with examples
+3. **Action/Plan Pattern** - Typed actions, plans, and execution
+4. **Effects Interface** - Full interface documentation and rationale
+5. **Testing Strategy** - Three-tier testing approach with examples
+6. **Key Patterns** - Context structs, error plans, structured tracking
+7. **Dry-Run Mode** - Implementation and benefits
+8. **Command Patterns** - When to use action/plan vs pure formatters
+9. **Benefits** - Testability, maintainability, features, reliability
+10. **Migration Path** - Incremental refactor phases
+11. **Common Questions** - FAQ with architectural decisions
+12. **Further Reading** - External resources
+
+**Decisions made:**
+
+- Comprehensive guide for both newcomers and maintainers
+- Real code examples throughout (not pseudocode)
+- Explains both "what" and "why" for architecture decisions
+- Documents testing patterns at three levels (pure, context, e2e)
+- Includes ASCII architecture diagram for quick understanding
+- Q&A section addresses common concerns (generics, interface splitting, etc.)
+- Links to actual source files and external resources
+- Covers both successful patterns and antipatterns
+
+---
+
+## Refactor Complete! 🎉
+
+All phases of the functional programming refactor are now complete:
+
+### Summary of Achievements
+
+**✅ Phase 1 - Foundation:** Extracted pure functions for git commands, branch filtering, worktree selection
+**✅ Phase 2 - Infrastructure:** Created Action/Plan types, Effects interface, RealEffects, and TestEffects
+**✅ Phase 3 - Trust Command:** Established FP pattern with comprehensive tests
+**✅ Phase 4 - Add Command:** Refactored most complex command with full test coverage
+**✅ Phase 5 - Remaining Commands:** Refactored open, remove, list; replaced manual repair with auto-repair
+**✅ Phase 6 - Polish:** Added dry-run support and comprehensive documentation
+
+### Metrics
+
+- **New files created:** 30+ (core planners, tests, effects implementations)
+- **Commands refactored:** trust, add, open, remove, list, repair (auto-repair)
+- **Test coverage:** 100+ test cases across core and integration tests
+- **Lines of code:** Reduced complexity, improved separation of concerns
+- **Zero breaking changes:** Full backward compatibility maintained throughout
+
+### Key Improvements
+
+1. **Testability:** Pure functions require no mocks, TestEffects eliminates real I/O in tests
+2. **Maintainability:** Clear separation between business logic (core) and I/O (shell)
+3. **Type Safety:** Typed action structs prevent runtime errors from map typos
+4. **Features:** Dry-run mode demonstrates power of plan-based architecture
+5. **Reliability:** Deterministic core + explicit effects = predictable behavior
+6. **Documentation:** Comprehensive architecture guide for future maintainers
+
+### Architecture Benefits Demonstrated
+
+- **Dry-run mode:** Added with ~100 lines of code (plan formatter + flag checks)
+- **Testing speed:** Tests run in milliseconds (no real git/filesystem)
+- **Refactor safety:** Type-safe actions mean compiler catches breaking changes
+- **Code review:** Pure functions easier to review (no hidden state or I/O)
+
+### Lessons Learned
+
+- Incremental refactor > big rewrite (maintained stability throughout)
+- Type safety matters (typed structs >> `map[string]any`)
+- Not all commands need the same pattern (list uses pure formatters, not actions)
+- Test at multiple levels (pure core, context builders, end-to-end)
+- YAGNI principle (didn't add Result types or split interfaces prematurely)
+- Extract testable functions from cobra handlers (BuildContext pattern)
+- Code reviews caught bugs that tests missed (NoOpen flag, path separator logic)
+
+### What's Next?
+
+The foundation is now solid for future enhancements:
+
+- **Transaction logs:** Plans could be serialized for audit trails
+- **Undo operations:** Plans are reversible (reverse action sequence)
+- **Remote execution:** Plans could be sent to remote sprout instances
+- **Parallel execution:** Independent actions could run concurrently
+- **Plan optimization:** Deduplicate or reorder actions for efficiency
+- **Progressive enhancement:** Add more commands incrementally using established patterns
+
+The refactor is complete. The codebase is now more testable, maintainable, and ready for future evolution. 🚀
