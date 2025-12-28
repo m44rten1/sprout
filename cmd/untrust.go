@@ -39,21 +39,7 @@ You can still create worktrees with --no-hooks or run 'sprout trust' to re-enabl
 
 		// Plan and execute
 		plan := core.PlanUntrustCommand(ctx)
-
-		// Dry-run mode: print plan instead of executing
-		if dryRunFlag {
-			fmt.Println(core.FormatPlan(plan))
-			return
-		}
-
-		// Execute plan
-		if err := effects.ExecutePlan(plan, fx); err != nil {
-			if code, ok := effects.IsExit(err); ok {
-				os.Exit(code)
-			}
-			fmt.Fprintf(os.Stderr, "Execution failed: %v\n", err)
-			os.Exit(1)
-		}
+		runPlan(plan, fx)
 	},
 }
 
