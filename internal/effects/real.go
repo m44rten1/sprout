@@ -1,8 +1,10 @@
 package effects
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/m44rten1/sprout/internal/config"
 	"github.com/m44rten1/sprout/internal/editor"
@@ -11,6 +13,7 @@ import (
 	"github.com/m44rten1/sprout/internal/sprout"
 	"github.com/m44rten1/sprout/internal/trust"
 	"github.com/m44rten1/sprout/internal/tui"
+	"golang.org/x/term"
 )
 
 // RealEffects implements Effects by delegating to existing packages.
@@ -125,4 +128,59 @@ func (r *RealEffects) GetSproutRoot() (string, error) {
 
 func (r *RealEffects) GetWorktreeRoot(repoRoot string) (string, error) {
 	return sprout.GetWorktreeRoot(repoRoot)
+}
+
+func (r *RealEffects) PromptTrustRepo(mainWorktreePath, hookType string, hookCommands []string) error {
+	// Check if stdin is a terminal (interactive mode)
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		// Not a terminal - return error with helpful guidance for non-interactive environments
+		var guidance strings.Builder
+		guidance.WriteString("\nRepository has hooks but is not trusted.\n\n")
+		guidance.WriteString(fmt.Sprintf("Hooks that would run on '%s':\n", hookType))
+		for _, cmd := range hookCommands {
+			guidance.WriteString(fmt.Sprintf("  • %s\n", cmd))
+		}
+		guidance.WriteString("\nTo allow these hooks, run:\n")
+		guidance.WriteString("  sprout trust\n\n")
+		guidance.WriteString("To skip hooks this time:\n")
+		guidance.WriteString("  Use the --no-hooks flag")
+		return fmt.Errorf("%s", guidance.String())
+	}
+
+	// Display warning and hooks
+	fmt.Fprintln(os.Stderr, "\n⚠️  This repository defines Sprout hooks in .sprout.yml:")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintf(os.Stderr, "  %s:\n", hookType)
+	for _, cmd := range hookCommands {
+		fmt.Fprintf(os.Stderr, "    - %s\n", cmd)
+	}
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "These commands will be executed automatically when a worktree is created.")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "Do you want to allow hooks from this repository?")
+	fmt.Fprintln(os.Stderr, "Press 'y' to run them, or run again with --no-hooks to skip.")
+	fmt.Fprintln(os.Stderr, "")
+
+	// Prompt for consent
+	fmt.Fprint(os.Stderr, "Allow hooks? [y/N]: ")
+
+	reader := bufio.NewReader(os.Stdin)
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read user input: %w", err)
+	}
+
+	response = strings.TrimSpace(strings.ToLower(response))
+
+	if response == "y" || response == "yes" {
+		// Trust the repository using the effects layer for consistency
+		if err := r.TrustRepo(mainWorktreePath); err != nil {
+			return fmt.Errorf("failed to trust repository: %w", err)
+		}
+		fmt.Fprintln(os.Stderr, "✓ Repository trusted")
+		return nil
+	}
+
+	// User declined
+	return fmt.Errorf("repository not trusted: user declined")
 }

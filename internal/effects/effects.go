@@ -28,6 +28,10 @@ type Effects interface {
 	IsTrusted(repoRoot string) (bool, error)
 	TrustRepo(repoRoot string) error
 	UntrustRepo(repoRoot string) error
+	// PromptTrustRepo prompts the user to trust a repository interactively.
+	// Shows hooks that will run and asks for consent.
+	// Returns error if stdin is not a terminal or user declined.
+	PromptTrustRepo(mainWorktreePath, hookType string, hookCommands []string) error
 
 	// Editor
 	OpenEditor(path string) error

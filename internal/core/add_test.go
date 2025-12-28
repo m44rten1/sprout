@@ -131,16 +131,27 @@ func TestPlanAddCommand(t *testing.T) {
 				NoHooks:            false,
 				NoOpen:             false,
 			},
-			wantActions: 2,
+			wantActions: 7,
 			checkActions: func(t *testing.T, actions []Action) {
-				assert.IsType(t, PrintError{}, actions[0])
-				err := actions[0].(PrintError)
-				assert.Contains(t, err.Msg, "not trusted")
-				assert.Contains(t, err.Msg, "sprout trust")
+				// First action: prompt for trust
+				assert.IsType(t, PromptTrust{}, actions[0])
+				prompt := actions[0].(PromptTrust)
+				assert.Equal(t, "/repo", prompt.MainWorktreePath)
+				assert.Equal(t, HookTypeOnCreate, prompt.HookType)
+				assert.Equal(t, []string{"npm install"}, prompt.HookCommands)
 
-				assert.IsType(t, Exit{}, actions[1])
-				exit := actions[1].(Exit)
-				assert.Equal(t, 1, exit.Code)
+				// Then: normal worktree creation flow
+				assert.IsType(t, PrintMessage{}, actions[1])
+				assert.IsType(t, CreateDirectory{}, actions[2])
+				assert.IsType(t, RunGitCommand{}, actions[3])
+				assert.IsType(t, PrintMessage{}, actions[4])
+				assert.IsType(t, OpenEditor{}, actions[5])
+
+				// Finally: run hooks
+				assert.IsType(t, RunHooks{}, actions[6])
+				hooks := actions[6].(RunHooks)
+				assert.Equal(t, HookTypeOnCreate, hooks.Type)
+				assert.Equal(t, []string{"npm install"}, hooks.Commands)
 			},
 		},
 		{

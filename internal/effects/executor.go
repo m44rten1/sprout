@@ -90,6 +90,12 @@ func executeAction(action core.Action, fx Effects) error {
 		}
 		return nil
 
+	case core.PromptTrust:
+		if err := fx.PromptTrustRepo(a.MainWorktreePath, string(a.HookType), a.HookCommands); err != nil {
+			return fmt.Errorf("prompt trust: %w", err)
+		}
+		return nil
+
 	case core.TrustRepo:
 		if err := fx.TrustRepo(a.RepoRoot); err != nil {
 			return fmt.Errorf("trust repo %s: %w", a.RepoRoot, err)

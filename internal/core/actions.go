@@ -23,7 +23,7 @@ var (
 	ErrEmptyMainWorktreePath = errors.New("main worktree path cannot be empty")
 	ErrEmptyBranch           = errors.New("branch name cannot be empty")
 	ErrNilConfig             = errors.New("config must not be nil")
-	ErrUntrustedWithHooks    = errors.New("Repository not trusted. Cannot run hooks.\n\nTo trust this repository, run:\n  sprout trust")
+	ErrUntrustedWithHooks    = errors.New("Repository not trusted. Cannot run hooks.\n\nThis repository has hooks defined that would run automatically.\nTo allow these hooks, run:\n  sprout trust\n\nTo skip hooks this time:\n  Add the --no-hooks flag")
 	ErrNoSproutWorktrees     = errors.New("no sprout-managed worktrees found")
 	ErrSelectionCancelled    = errors.New("selection cancelled")
 )
@@ -86,6 +86,16 @@ type RunHooks struct {
 }
 
 func (RunHooks) isAction() {}
+
+// PromptTrust prompts the user to trust a repository interactively.
+// Shows hooks that would run and asks for consent.
+type PromptTrust struct {
+	MainWorktreePath string   // Main worktree path (trust key)
+	HookType         HookType // Type of hooks that would run
+	HookCommands     []string // Commands that would be executed
+}
+
+func (PromptTrust) isAction() {}
 
 // TrustRepo marks a repository as trusted.
 type TrustRepo struct {

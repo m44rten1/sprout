@@ -96,19 +96,27 @@ func TestPlanOpenCommand(t *testing.T) {
 				IsTrusted: false,
 				NoHooks:   false,
 			},
-			wantActions:  2,
-			wantExit:     true,
-			wantExitCode: 1,
+			wantActions: 3,
+			wantExit:    false,
 			checkActions: func(t *testing.T, actions []Action) {
-				require.Len(t, actions, 2)
+				require.Len(t, actions, 3)
 
-				printErr, ok := actions[0].(PrintError)
-				require.True(t, ok, "first action should be PrintError")
-				assert.Contains(t, printErr.Msg, "not trusted")
+				// First action: prompt for trust
+				promptTrust, ok := actions[0].(PromptTrust)
+				require.True(t, ok, "first action should be PromptTrust")
+				assert.Equal(t, "/test/repo", promptTrust.MainWorktreePath)
+				assert.Equal(t, HookTypeOnOpen, promptTrust.HookType)
+				assert.Equal(t, []string{"echo 'opening'"}, promptTrust.HookCommands)
 
-				exitAction, ok := actions[1].(Exit)
-				require.True(t, ok, "second action should be Exit")
-				assert.Equal(t, 1, exitAction.Code)
+				// Second action: open editor
+				openEditor, ok := actions[1].(OpenEditor)
+				require.True(t, ok, "second action should be OpenEditor")
+				assert.Equal(t, "/test/repo/.sprout/feature", openEditor.Path)
+
+				// Third action: run hooks
+				runHooks, ok := actions[2].(RunHooks)
+				require.True(t, ok, "third action should be RunHooks")
+				assert.Equal(t, HookTypeOnOpen, runHooks.Type)
 			},
 		},
 		{

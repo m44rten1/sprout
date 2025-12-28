@@ -52,6 +52,7 @@ type TestEffects struct {
 	RunHooksErr            error
 	LocalBranchExistsErr   error
 	RemoteBranchExistsErr  error
+	PromptTrustRepoErr     error
 
 	// Interaction results
 	SelectedBranchIndex   int
@@ -81,6 +82,7 @@ type TestEffects struct {
 	GetWorktreePathCalls     int
 	GetSproutRootCalls       int
 	GetWorktreeRootCalls     int
+	PromptTrustRepoCalls     int
 
 	// Call tracking (captured side effects and arguments)
 	ListWorktreesArgs         []string   // repoRoot args passed to ListWorktrees
@@ -100,6 +102,7 @@ type TestEffects struct {
 	RemoteBranchExistsQueries []BranchQuery
 	GetWorktreePathQueries    []WorktreePathQuery
 	GetWorktreeRootArgs       []string // repoRoot args passed to GetWorktreeRoot
+	PromptTrustRepoInvocations []PromptTrustCall
 }
 
 // GitCmd represents a recorded git command execution.
@@ -127,6 +130,13 @@ type BranchQuery struct {
 type WorktreePathQuery struct {
 	RepoPath string
 	Branch   string
+}
+
+// PromptTrustCall represents a trust prompt invocation.
+type PromptTrustCall struct {
+	MainWorktreePath string
+	HookType         string
+	HookCommands     []string
 }
 
 // NewTestEffects creates a new TestEffects with sensible defaults.
@@ -160,6 +170,7 @@ func NewTestEffects() *TestEffects {
 		RemoteBranchExistsQueries: []BranchQuery{},
 		GetWorktreePathQueries:    []WorktreePathQuery{},
 		GetWorktreeRootArgs:       []string{},
+		PromptTrustRepoInvocations: []PromptTrustCall{},
 		SproutRoot:                "/home/user/.local/share/sprout",
 		WorktreeRoot:              "/home/user/.local/share/sprout/test-12345678",
 	}
@@ -396,4 +407,19 @@ func (t *TestEffects) GetWorktreeRoot(repoRoot string) (string, error) {
 		return "", fmt.Errorf("failed to get worktree root")
 	}
 	return t.WorktreeRoot, nil
+}
+
+func (t *TestEffects) PromptTrustRepo(mainWorktreePath, hookType string, hookCommands []string) error {
+	t.PromptTrustRepoCalls++
+	t.PromptTrustRepoInvocations = append(t.PromptTrustRepoInvocations, PromptTrustCall{
+		MainWorktreePath: mainWorktreePath,
+		HookType:         hookType,
+		HookCommands:     hookCommands,
+	})
+	if t.PromptTrustRepoErr != nil {
+		return t.PromptTrustRepoErr
+	}
+	// Auto-trust on success (simulates user saying yes)
+	t.TrustedRepos[mainWorktreePath] = true
+	return nil
 }

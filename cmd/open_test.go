@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"testing"
 
@@ -369,19 +370,20 @@ func TestOpenCommand_EndToEnd(t *testing.T) {
 					},
 				}
 				fx.TrustedRepos["/test/repo"] = false
+				// Make prompt fail (simulating non-interactive terminal)
+				fx.PromptTrustRepoErr = fmt.Errorf("not a terminal: cannot prompt for trust interactively")
 			},
 			assertBehavior: func(t *testing.T, fx *effects.TestEffects) {
-				// Should not open editor or run hooks
+				// Should try to prompt
+				assert.Equal(t, 1, fx.PromptTrustRepoCalls)
+
+				// Should not open editor or run hooks (prompt failed)
 				assert.Empty(t, fx.OpenedPaths)
 				assert.Empty(t, fx.RunHooksInvocations)
-
-				// Error message printed
-				require.Len(t, fx.PrintedErrs, 1)
-				assert.Contains(t, fx.PrintedErrs[0], "not trusted")
 			},
 			wantErr:      true,
-			wantExit:     true,
-			wantExitCode: 1,
+			wantExit:     false, // ExecutePlan returns regular error, not Exit
+			wantExitCode: 0,
 		},
 		{
 			name:    "open worktree with --no-hooks flag",

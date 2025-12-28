@@ -23,9 +23,10 @@ type OpenContext struct {
 // PlanOpenCommand creates a plan for opening a worktree.
 //
 // If open hooks are configured and not disabled via --no-hooks, the repository
-// must be trusted or the plan will return an error. This security check prevents
-// untrusted repositories from executing arbitrary commands on the user's system.
-// The user must explicitly run `sprout trust` before hooks will execute.
+// must be trusted or the plan will prompt for trust interactively. This security
+// check prevents untrusted repositories from executing arbitrary commands. In
+// interactive terminals, users can grant trust inline; in non-interactive environments,
+// they must run `sprout trust` explicitly or use --no-hooks.
 //
 // Logic:
 //  1. Validate inputs
@@ -52,7 +53,23 @@ func PlanOpenCommand(ctx OpenContext) Plan {
 			return errorPlan(ErrEmptyMainWorktreePath)
 		}
 		if !ctx.IsTrusted {
-			return errorPlan(ErrUntrustedWithHooks)
+			// Return a plan that prompts for trust interactively
+			// If prompt fails (non-interactive), it will error with helpful guidance
+			return Plan{Actions: []Action{
+				PromptTrust{
+					MainWorktreePath: ctx.MainWorktreePath,
+					HookType:         HookTypeOnOpen,
+					HookCommands:     ctx.Config.Hooks.OnOpen,
+				},
+				OpenEditor{Path: ctx.TargetPath},
+				RunHooks{
+					Type:             HookTypeOnOpen,
+					Commands:         ctx.Config.Hooks.OnOpen,
+					Path:             ctx.TargetPath,
+					RepoRoot:         ctx.RepoRoot,
+					MainWorktreePath: ctx.MainWorktreePath,
+				},
+			}}
 		}
 	}
 

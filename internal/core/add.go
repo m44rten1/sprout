@@ -71,7 +71,33 @@ func PlanAddCommand(ctx AddContext) Plan {
 			return errorPlan(ErrEmptyMainWorktreePath)
 		}
 		if !ctx.IsTrusted {
-			return errorPlan(ErrUntrustedWithHooks)
+			// Return a plan that prompts for trust interactively
+			// If prompt fails (non-interactive), it will error with helpful guidance
+			return Plan{Actions: []Action{
+				PromptTrust{
+					MainWorktreePath: ctx.MainWorktreePath,
+					HookType:         HookTypeOnCreate,
+					HookCommands:     ctx.Config.Hooks.OnCreate,
+				},
+				PrintMessage{Msg: fmt.Sprintf(msgCreatingWorktree, ctx.Branch, ctx.WorktreePath)},
+				CreateDirectory{
+					Path: filepath.Dir(ctx.WorktreePath),
+					Perm: 0755,
+				},
+				RunGitCommand{
+					Dir:  ctx.RepoRoot,
+					Args: WorktreeAddArgs(ctx.WorktreePath, ctx.Branch, ctx.LocalBranchExists, ctx.RemoteBranchExists, ctx.HasOriginMain),
+				},
+				PrintMessage{Msg: msgWorktreeCreated},
+				conditionalEditor(ctx.NoOpen, ctx.WorktreePath),
+				RunHooks{
+					Type:             HookTypeOnCreate,
+					Commands:         ctx.Config.Hooks.OnCreate,
+					Path:             ctx.WorktreePath,
+					RepoRoot:         ctx.RepoRoot,
+					MainWorktreePath: ctx.MainWorktreePath,
+				},
+			}}
 		}
 	}
 
@@ -109,6 +135,14 @@ func PlanAddCommand(ctx AddContext) Plan {
 	}
 
 	return Plan{Actions: actions}
+}
+
+// conditionalEditor returns OpenEditor action unless noOpen is true.
+func conditionalEditor(noOpen bool, path string) Action {
+	if noOpen {
+		return NoOp{}
+	}
+	return OpenEditor{Path: path}
 }
 
 // errorPlan creates a plan that prints an error and exits.

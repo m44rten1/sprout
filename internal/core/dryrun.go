@@ -65,6 +65,12 @@ func formatAction(action Action) string {
 	case TrustRepo:
 		return fmt.Sprintf("Trust repository: %s", a.RepoRoot)
 
+	case UntrustRepo:
+		return fmt.Sprintf("Untrust repository: %s", a.RepoRoot)
+
+	case PromptTrust:
+		return fmt.Sprintf("Prompt to trust repository: %s (%d %s hooks)", a.MainWorktreePath, len(a.HookCommands), a.HookType)
+
 	case SelectInteractive:
 		return "Interactive selection (should not appear in execution plans)"
 
