@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/m44rten1/sprout/internal/config"
 	"github.com/m44rten1/sprout/internal/editor"
@@ -89,7 +90,30 @@ func (r *RealEffects) SelectBranch(branches []git.Branch) (int, error) {
 }
 
 func (r *RealEffects) SelectWorktree(worktrees []git.Worktree) (int, error) {
-	return tui.SelectOne(worktrees, worktreeLabel, nil)
+	// Pre-compute statuses for all worktrees in parallel
+	statuses := make([]git.WorktreeStatus, len(worktrees))
+	var wg sync.WaitGroup
+	for i, wt := range worktrees {
+		wg.Add(1)
+		go func(idx int, path string) {
+			defer wg.Done()
+			statuses[idx] = git.GetWorktreeStatus(path)
+		}(i, wt.Path)
+	}
+	wg.Wait()
+
+	// Create label function with pre-computed statuses
+	labelFunc := func(w git.Worktree) string {
+		// Find index of this worktree to get its status
+		for i, wt := range worktrees {
+			if wt.Path == w.Path {
+				return worktreeLabelWithStatus(w, statuses[i])
+			}
+		}
+		return worktreeLabel(w)
+	}
+
+	return tui.SelectOne(worktrees, labelFunc, nil)
 }
 
 // branchLabel returns the display name for a branch.
@@ -104,6 +128,35 @@ func worktreeLabel(w git.Worktree) string {
 		return w.Branch
 	}
 	return w.Path
+}
+
+// worktreeLabelWithStatus returns a display label for a worktree with status icons.
+func worktreeLabelWithStatus(w git.Worktree, status git.WorktreeStatus) string {
+	label := worktreeLabel(w)
+	statusIcons := buildPlainStatusIcons(status)
+	if statusIcons != "" {
+		return label + " " + statusIcons
+	}
+	return label
+}
+
+// buildPlainStatusIcons builds status icons without ANSI color codes.
+// Used for fuzzy finder which doesn't support ANSI escapes.
+func buildPlainStatusIcons(status git.WorktreeStatus) string {
+	var icons []string
+	if status.Dirty {
+		icons = append(icons, "✗")
+	}
+	if status.Ahead > 0 {
+		icons = append(icons, "↑")
+	}
+	if status.Behind > 0 {
+		icons = append(icons, "↓")
+	}
+	if status.Unmerged {
+		icons = append(icons, "↕")
+	}
+	return strings.Join(icons, " ")
 }
 
 func (r *RealEffects) RunHooks(repoRoot, worktreePath, mainWorktreePath string, commands []string, hookType string) error {
