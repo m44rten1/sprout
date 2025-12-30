@@ -2,7 +2,6 @@ package core
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -24,6 +23,29 @@ func colorize(s, color string) string {
 	return color + s + colorReset
 }
 
+// ListContext contains all inputs needed for list formatting.
+// This is the context struct passed from the imperative shell to the pure formatter.
+type ListContext struct {
+	Repos   []RepoDisplay
+	Home    string // User's home directory for path shortening
+	ShowAll bool   // Whether --all flag was used (affects headers and empty message)
+}
+
+// RepoDisplay holds display data for a repository (pure data, no I/O).
+type RepoDisplay struct {
+	Name      string
+	MainPath  string
+	Worktrees []WorktreeDisplayItem
+}
+
+// WorktreeDisplayItem holds display data for a worktree.
+type WorktreeDisplayItem struct {
+	Branch string
+	Path   string
+	Status git.WorktreeStatus
+	IsMain bool
+}
+
 // BuildStatusEmojis builds a string of status emoji indicators.
 // Returns empty string for clean worktrees.
 func BuildStatusEmojis(status git.WorktreeStatus) string {
@@ -41,16 +63,6 @@ func BuildStatusEmojis(status git.WorktreeStatus) string {
 		emojis = append(emojis, colorize("↕", colorMagenta)) // Magenta - special state
 	}
 	return strings.Join(emojis, " ")
-}
-
-// ShortenPath replaces the home directory with ~ for shorter display.
-// Returns original path if home directory cannot be determined or path is not under home.
-func ShortenPath(path string) string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return path
-	}
-	return ShortenPathWithHome(path, home)
 }
 
 // ShortenPathWithHome is the pure version of ShortenPath that takes home as a parameter.
@@ -129,4 +141,54 @@ func FormatWorktree(display WorktreeDisplay) string {
 	}
 
 	return branchLine + "\n" + pathLine
+}
+
+// FormatListOutput formats the list command output.
+// Pure function that handles both empty and non-empty cases.
+// This is the single entry point for list formatting from the command layer.
+func FormatListOutput(ctx ListContext) string {
+	if len(ctx.Repos) == 0 {
+		if ctx.ShowAll {
+			return "\nNo sprout worktrees found."
+		}
+		return "\nNo sprout worktrees found for this repository."
+	}
+
+	return FormatRepoList(ctx.Repos, ctx.Home, ctx.ShowAll)
+}
+
+// FormatRepoList formats a list of repositories for display.
+// Pure function - takes home dir as parameter instead of calling os.UserHomeDir().
+// Returns empty string if repos is empty.
+func FormatRepoList(repos []RepoDisplay, home string, showHeaders bool) string {
+	if len(repos) == 0 {
+		return ""
+	}
+
+	var lines []string
+	lines = append(lines, "") // Add spacing from prompt
+
+	for i, repo := range repos {
+		if showHeaders {
+			if i > 0 {
+				lines = append(lines, "") // Blank line between repos
+			}
+			lines = append(lines, fmt.Sprintf("\033[1m%s\033[0m", repo.Name))
+		}
+
+		for j, wt := range repo.Worktrees {
+			isLast := j == len(repo.Worktrees)-1
+			display := WorktreeDisplay{
+				Branch:       wt.Branch,
+				Path:         ShortenPathWithHome(wt.Path, home),
+				StatusEmojis: BuildStatusEmojis(wt.Status),
+				IsMain:       wt.IsMain,
+				IsLast:       isLast,
+				UseTreeLines: showHeaders,
+			}
+			lines = append(lines, FormatWorktree(display))
+		}
+	}
+
+	return strings.Join(lines, "\n")
 }

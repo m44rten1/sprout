@@ -38,6 +38,11 @@ type TestEffects struct {
 	GetSproutRootErr   error
 	GetWorktreeRootErr error
 
+	// Filesystem (additional)
+	DirEntries        map[string][]os.DirEntry // path -> entries
+	UserHome          string
+	WorktreeStatuses  map[string]git.WorktreeStatus // path -> status
+
 	// Error injection - set these to simulate failures
 	GetRepoRootErr         error
 	GetMainWorktreePathErr error
@@ -53,6 +58,8 @@ type TestEffects struct {
 	LocalBranchExistsErr   error
 	RemoteBranchExistsErr  error
 	PromptTrustRepoErr     error
+	ReadDirErr             error
+	UserHomeDirErr         error
 
 	// Interaction results
 	SelectedBranchIndex   int
@@ -83,6 +90,9 @@ type TestEffects struct {
 	GetSproutRootCalls       int
 	GetWorktreeRootCalls     int
 	PromptTrustRepoCalls     int
+	ReadDirCalls             int
+	UserHomeDirCalls         int
+	GetWorktreeStatusCalls   int
 
 	// Call tracking (captured side effects and arguments)
 	ListWorktreesArgs         []string   // repoRoot args passed to ListWorktrees
@@ -101,8 +111,10 @@ type TestEffects struct {
 	LocalBranchExistsQueries  []BranchQuery
 	RemoteBranchExistsQueries []BranchQuery
 	GetWorktreePathQueries    []WorktreePathQuery
-	GetWorktreeRootArgs       []string // repoRoot args passed to GetWorktreeRoot
+	GetWorktreeRootArgs        []string // repoRoot args passed to GetWorktreeRoot
 	PromptTrustRepoInvocations []PromptTrustCall
+	ReadDirArgs                []string // path args passed to ReadDir
+	GetWorktreeStatusArgs      []string // path args passed to GetWorktreeStatus
 }
 
 // GitCmd represents a recorded git command execution.
@@ -169,10 +181,15 @@ func NewTestEffects() *TestEffects {
 		LocalBranchExistsQueries:  []BranchQuery{},
 		RemoteBranchExistsQueries: []BranchQuery{},
 		GetWorktreePathQueries:    []WorktreePathQuery{},
-		GetWorktreeRootArgs:       []string{},
+		GetWorktreeRootArgs:        []string{},
 		PromptTrustRepoInvocations: []PromptTrustCall{},
-		SproutRoot:                "/home/user/.local/share/sprout",
-		WorktreeRoot:              "/home/user/.local/share/sprout/test-12345678",
+		SproutRoot:                 "/home/user/.local/share/sprout",
+		WorktreeRoot:               "/home/user/.local/share/sprout/test-12345678",
+		DirEntries:                 make(map[string][]os.DirEntry),
+		UserHome:                   "/home/user",
+		WorktreeStatuses:           make(map[string]git.WorktreeStatus),
+		ReadDirArgs:                []string{},
+		GetWorktreeStatusArgs:      []string{},
 	}
 }
 
@@ -422,4 +439,38 @@ func (t *TestEffects) PromptTrustRepo(mainWorktreePath, hookType string, hookCom
 	// Auto-trust on success (simulates user saying yes)
 	t.TrustedRepos[mainWorktreePath] = true
 	return nil
+}
+
+func (t *TestEffects) ReadDir(path string) ([]os.DirEntry, error) {
+	t.ReadDirCalls++
+	t.ReadDirArgs = append(t.ReadDirArgs, path)
+	if t.ReadDirErr != nil {
+		return nil, t.ReadDirErr
+	}
+	if entries, ok := t.DirEntries[path]; ok {
+		return entries, nil
+	}
+	// Default: empty directory
+	return []os.DirEntry{}, nil
+}
+
+func (t *TestEffects) UserHomeDir() (string, error) {
+	t.UserHomeDirCalls++
+	if t.UserHomeDirErr != nil {
+		return "", t.UserHomeDirErr
+	}
+	if t.UserHome == "" {
+		return "", fmt.Errorf("failed to get home directory")
+	}
+	return t.UserHome, nil
+}
+
+func (t *TestEffects) GetWorktreeStatus(path string) git.WorktreeStatus {
+	t.GetWorktreeStatusCalls++
+	t.GetWorktreeStatusArgs = append(t.GetWorktreeStatusArgs, path)
+	if status, ok := t.WorktreeStatuses[path]; ok {
+		return status
+	}
+	// Default: clean worktree
+	return git.WorktreeStatus{}
 }

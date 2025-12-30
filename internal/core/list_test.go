@@ -114,7 +114,8 @@ func TestShortenPath(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			result := ShortenPath(tt.path)
+			// Use the pure function with home as parameter
+			result := ShortenPathWithHome(tt.path, home)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

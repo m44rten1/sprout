@@ -8,8 +8,8 @@ import (
 	"sync"
 
 	"github.com/m44rten1/sprout/internal/core"
+	"github.com/m44rten1/sprout/internal/effects"
 	"github.com/m44rten1/sprout/internal/git"
-	"github.com/m44rten1/sprout/internal/sprout"
 
 	"github.com/spf13/cobra"
 )
@@ -30,31 +30,20 @@ Status indicators show the git state of each worktree:
 Multiple indicators can appear together (e.g., ` + "\033[31m✗\033[0m \033[35m↕\033[0m" + ` means dirty and unmerged).
 Clean worktrees show no indicators.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if listAllFlag {
-			repos, err := collectAllRepos()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			if len(repos) == 0 {
-				fmt.Println("\nNo sprout worktrees found.")
-				return
-			}
-			printRepos(repos, true)
-			return
-		}
+		fx := effects.NewRealEffects()
 
-		// Single repo mode
-		repo, found, err := collectCurrentRepo()
+		// 1. Gather (imperative - uses Effects)
+		ctx, err := BuildListContext(fx, listAllFlag)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
-		if !found {
-			fmt.Println("\nNo sprout worktrees found for this repository.")
-			return
-		}
-		printRepos([]RepoInfo{repo}, false)
+
+		// 2. Format (pure - no I/O)
+		output := core.FormatListOutput(ctx)
+
+		// 3. Output (imperative)
+		fx.Print(output)
 	},
 }
 
@@ -63,67 +52,77 @@ func init() {
 	listCmd.Flags().BoolVar(&listAllFlag, "all", false, "List worktrees from all repositories")
 }
 
-// RepoInfo holds information about a repository and its worktrees.
-type RepoInfo struct {
-	Name      string
-	MainPath  string
-	Worktrees []WorktreeInfo
+// BuildListContext gathers all data needed for the list command.
+// This is the imperative "gather" step of the FCIS sandwich.
+func BuildListContext(fx effects.Effects, all bool) (core.ListContext, error) {
+	var repos []core.RepoDisplay
+	var err error
+
+	if all {
+		repos, err = collectAllReposWithEffects(fx)
+	} else {
+		var repo core.RepoDisplay
+		var found bool
+		repo, found, err = collectCurrentRepoWithEffects(fx)
+		if err == nil && found {
+			repos = []core.RepoDisplay{repo}
+		}
+	}
+
+	if err != nil {
+		return core.ListContext{}, err
+	}
+
+	home, _ := fx.UserHomeDir()
+
+	return core.ListContext{
+		Repos:   repos,
+		Home:    home,
+		ShowAll: all,
+	}, nil
 }
 
-// WorktreeInfo holds information about a single worktree.
-type WorktreeInfo struct {
-	Worktree git.Worktree
-	Status   git.WorktreeStatus
-	IsMain   bool
-}
-
-// RepoWorktrees holds worktrees for a specific repository (legacy type for compatibility).
-type RepoWorktrees struct {
-	RepoRoot  string
-	Worktrees []git.Worktree
-}
-
-// collectCurrentRepo gathers information about the current repository.
+// collectCurrentRepoWithEffects gathers information about the current repository using Effects.
 // Returns (repo, true, nil) if sprout worktrees exist.
 // Returns (empty, false, nil) if no sprout worktrees exist (not an error).
 // Returns (empty, false, err) if git introspection fails or repo has no worktrees at all.
-func collectCurrentRepo() (RepoInfo, bool, error) {
-	repoRoot, err := git.GetRepoRoot()
+func collectCurrentRepoWithEffects(fx effects.Effects) (core.RepoDisplay, bool, error) {
+	repoRoot, err := fx.GetRepoRoot()
 	if err != nil {
-		return RepoInfo{}, false, err
+		return core.RepoDisplay{}, false, err
 	}
 
-	allWorktrees, err := git.ListWorktrees(repoRoot)
+	allWorktrees, err := fx.ListWorktrees(repoRoot)
 	if err != nil {
-		return RepoInfo{}, false, fmt.Errorf("failed to list worktrees: %w", err)
+		return core.RepoDisplay{}, false, fmt.Errorf("failed to list worktrees: %w", err)
 	}
 
 	if len(allWorktrees) == 0 {
-		return RepoInfo{}, false, fmt.Errorf("no worktrees found")
+		return core.RepoDisplay{}, false, fmt.Errorf("no worktrees found")
 	}
 
 	// First worktree is always the main repo
 	mainWorktree := allWorktrees[0]
 
 	// Filter to only sprout-managed worktrees
-	sproutRoot, err := sprout.GetSproutRoot()
+	sproutRoot, err := fx.GetSproutRoot()
 	if err != nil {
-		return RepoInfo{}, false, fmt.Errorf("failed to get sprout root: %w", err)
+		return core.RepoDisplay{}, false, fmt.Errorf("failed to get sprout root: %w", err)
 	}
 	sproutWorktrees := core.FilterSproutWorktrees(allWorktrees[1:], sproutRoot)
-	sproutWorktrees = filterExistingWorktrees(sproutWorktrees)
+	sproutWorktrees = filterExistingWorktreesWithEffects(fx, sproutWorktrees)
 
 	if len(sproutWorktrees) == 0 {
-		return RepoInfo{}, false, nil // No sprout worktrees is not an error
+		return core.RepoDisplay{}, false, nil // No sprout worktrees is not an error
 	}
 
-	return buildRepoInfo(filepath.Base(mainWorktree.Path), mainWorktree, sproutWorktrees), true, nil
+	return buildRepoDisplayWithEffects(fx, filepath.Base(mainWorktree.Path), mainWorktree, sproutWorktrees), true, nil
 }
 
-// collectAllRepos discovers all sprout-managed repositories.
+// collectAllReposWithEffects discovers all sprout-managed repositories using Effects.
 // Returns nil, nil if no repositories are found (not an error).
-func collectAllRepos() ([]RepoInfo, error) {
-	repoDirs, err := findAllRepoDirectories()
+func collectAllReposWithEffects(fx effects.Effects) ([]core.RepoDisplay, error) {
+	repoDirs, err := findAllRepoDirectoriesWithEffects(fx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan sprout directories: %w", err)
 	}
@@ -131,10 +130,10 @@ func collectAllRepos() ([]RepoInfo, error) {
 		return nil, nil
 	}
 
-	repoMap := discoverReposParallel(repoDirs)
+	repoMap := discoverReposParallelWithEffects(fx, repoDirs)
 
 	// Convert map to sorted slice
-	repos := make([]RepoInfo, 0, len(repoMap))
+	repos := make([]core.RepoDisplay, 0, len(repoMap))
 	for _, repo := range repoMap {
 		repos = append(repos, repo)
 	}
@@ -146,26 +145,22 @@ func collectAllRepos() ([]RepoInfo, error) {
 	return repos, nil
 }
 
-// findAllRepoDirectories scans the sprout root for repository directories.
+// findAllRepoDirectoriesWithEffects scans the sprout root for repository directories using Effects.
 // Returns nil, nil if sprout directory doesn't exist (user hasn't used sprout yet).
 // Returns error if sprout directory exists but can't be read (permissions, IO error).
-func findAllRepoDirectories() ([]string, error) {
-	sproutRoot, err := sprout.GetSproutRoot()
+func findAllRepoDirectoriesWithEffects(fx effects.Effects) ([]string, error) {
+	sproutRoot, err := fx.GetSproutRoot()
 	if err != nil {
 		return nil, fmt.Errorf("get sprout root: %w", err)
 	}
 
 	// Check if sprout directory exists
-	if _, err := os.Stat(sproutRoot); err != nil {
-		if os.IsNotExist(err) {
-			// Not an error - user just hasn't created any worktrees yet
-			return nil, nil
-		}
-		// Real error - permissions, IO problem, etc.
-		return nil, fmt.Errorf("stat sprout directory: %w", err)
+	if !fx.FileExists(sproutRoot) {
+		// Not an error - user just hasn't created any worktrees yet
+		return nil, nil
 	}
 
-	entries, err := os.ReadDir(sproutRoot)
+	entries, err := fx.ReadDir(sproutRoot)
 	if err != nil {
 		return nil, fmt.Errorf("read sprout directory: %w", err)
 	}
@@ -180,18 +175,18 @@ func findAllRepoDirectories() ([]string, error) {
 	return repoDirs, nil
 }
 
-// discoverReposParallel processes repo directories in parallel and returns a map of repos.
-func discoverReposParallel(repoDirs []string) map[string]RepoInfo {
+// discoverReposParallelWithEffects processes repo directories in parallel and returns a map of repos.
+func discoverReposParallelWithEffects(fx effects.Effects, repoDirs []string) map[string]core.RepoDisplay {
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	repoMap := make(map[string]RepoInfo)
+	repoMap := make(map[string]core.RepoDisplay)
 
 	for _, repoDir := range repoDirs {
 		wg.Add(1)
 		go func(dir string) {
 			defer wg.Done()
 
-			repo, ok := processRepoDirectory(dir)
+			repo, ok := processRepoDirectoryWithEffects(fx, dir)
 			if !ok {
 				return
 			}
@@ -208,53 +203,54 @@ func discoverReposParallel(repoDirs []string) map[string]RepoInfo {
 	return repoMap
 }
 
-// processRepoDirectory processes a single repo directory and returns repo info.
-func processRepoDirectory(repoDir string) (RepoInfo, bool) {
+// processRepoDirectoryWithEffects processes a single repo directory and returns repo info.
+func processRepoDirectoryWithEffects(fx effects.Effects, repoDir string) (core.RepoDisplay, bool) {
 	// Find any worktree in this repo dir
-	anyWorktree := findFirstWorktree(repoDir)
+	anyWorktree := findFirstWorktreeWithEffects(fx, repoDir)
 	if anyWorktree == "" {
-		return RepoInfo{}, false
+		return core.RepoDisplay{}, false
 	}
 
 	// Get all worktrees for this repo
-	allWorktrees, err := git.ListWorktrees(anyWorktree)
+	allWorktrees, err := fx.ListWorktrees(anyWorktree)
 	if err != nil || len(allWorktrees) == 0 {
-		return RepoInfo{}, false
+		return core.RepoDisplay{}, false
 	}
 
 	// First worktree is the main repo
 	mainWorktree := allWorktrees[0]
 
 	// Filter to only sprout-managed worktrees
-	sproutRoot, err := sprout.GetSproutRoot()
+	sproutRoot, err := fx.GetSproutRoot()
 	if err != nil {
-		return RepoInfo{}, false
+		return core.RepoDisplay{}, false
 	}
 	sproutWorktrees := core.FilterSproutWorktrees(allWorktrees[1:], sproutRoot)
-	sproutWorktrees = filterExistingWorktrees(sproutWorktrees)
+	sproutWorktrees = filterExistingWorktreesWithEffects(fx, sproutWorktrees)
 
 	if len(sproutWorktrees) == 0 {
-		return RepoInfo{}, false
+		return core.RepoDisplay{}, false
 	}
 
 	repoName := filepath.Base(mainWorktree.Path)
-	return buildRepoInfo(repoName, mainWorktree, sproutWorktrees), true
+	return buildRepoDisplayWithEffects(fx, repoName, mainWorktree, sproutWorktrees), true
 }
 
-// buildRepoInfo creates a RepoInfo with parallel status collection.
-func buildRepoInfo(name string, mainWorktree git.Worktree, sproutWorktrees []git.Worktree) RepoInfo {
+// buildRepoDisplayWithEffects creates a RepoDisplay with parallel status collection.
+func buildRepoDisplayWithEffects(fx effects.Effects, name string, mainWorktree git.Worktree, sproutWorktrees []git.Worktree) core.RepoDisplay {
 	totalWorktrees := 1 + len(sproutWorktrees)
-	worktrees := make([]WorktreeInfo, totalWorktrees)
+	worktrees := make([]core.WorktreeDisplayItem, totalWorktrees)
 	var wg sync.WaitGroup
 
 	// Collect status for main worktree
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		worktrees[0] = WorktreeInfo{
-			Worktree: mainWorktree,
-			Status:   git.GetWorktreeStatus(mainWorktree.Path),
-			IsMain:   true,
+		worktrees[0] = core.WorktreeDisplayItem{
+			Branch: mainWorktree.Branch,
+			Path:   mainWorktree.Path,
+			Status: fx.GetWorktreeStatus(mainWorktree.Path),
+			IsMain: true,
 		}
 	}()
 
@@ -263,73 +259,37 @@ func buildRepoInfo(name string, mainWorktree git.Worktree, sproutWorktrees []git
 		wg.Add(1)
 		go func(idx int, worktree git.Worktree) {
 			defer wg.Done()
-			worktrees[idx+1] = WorktreeInfo{
-				Worktree: worktree,
-				Status:   git.GetWorktreeStatus(worktree.Path),
-				IsMain:   false,
+			worktrees[idx+1] = core.WorktreeDisplayItem{
+				Branch: worktree.Branch,
+				Path:   worktree.Path,
+				Status: fx.GetWorktreeStatus(worktree.Path),
+				IsMain: false,
 			}
 		}(i, wt)
 	}
 
 	wg.Wait()
 
-	return RepoInfo{
+	return core.RepoDisplay{
 		Name:      name,
 		MainPath:  mainWorktree.Path,
 		Worktrees: worktrees,
 	}
 }
 
-// printRepos prints repository information with proper formatting.
-func printRepos(repos []RepoInfo, showRepoHeaders bool) {
-	if len(repos) == 0 {
-		fmt.Println("No sprout worktrees found.")
-		return
-	}
-
-	fmt.Println() // Add spacing from prompt
-
-	for i, repo := range repos {
-		if showRepoHeaders {
-			if i > 0 {
-				fmt.Println() // Blank line between repos
-			}
-			fmt.Printf("\033[1m%s\033[0m\n", repo.Name)
-		}
-
-		for j, wt := range repo.Worktrees {
-			isLast := j == len(repo.Worktrees)-1
-			printWorktree(wt, isLast, showRepoHeaders)
-		}
-	}
-}
-
-// printWorktree prints a single worktree with formatting.
-func printWorktree(wt WorktreeInfo, isLast bool, useTreeLines bool) {
-	display := core.WorktreeDisplay{
-		Branch:       wt.Worktree.Branch,
-		Path:         core.ShortenPath(wt.Worktree.Path),
-		StatusEmojis: core.BuildStatusEmojis(wt.Status),
-		IsMain:       wt.IsMain,
-		IsLast:       isLast,
-		UseTreeLines: useTreeLines,
-	}
-	fmt.Println(core.FormatWorktree(display))
-}
-
-// findFirstWorktree does a shallow scan to find any worktree in the repo directory.
+// findFirstWorktreeWithEffects does a shallow scan to find any worktree in the repo directory.
 // Sprout structure can be:
 //   - <repo-dir>/<branch>/.git (flat, older structure)
 //   - <repo-dir>/<branch>/<repo-slug>/.git (nested, newer structure)
 //   - <repo-dir>/<branch>/<repo-slug>/<repo-slug>/.git (double-nested, migration artifact)
 //
 // We scan up to 3 levels deep and return the first WORKING worktree.
-func findFirstWorktree(repoDir string) string {
-	candidates := scanForGitDirs(repoDir, 3)
+func findFirstWorktreeWithEffects(fx effects.Effects, repoDir string) string {
+	candidates := scanForGitDirsWithEffects(fx, repoDir, 3)
 
 	// Try each candidate and return the first one where git worktree list works
 	for _, candidate := range candidates {
-		if _, err := git.ListWorktrees(candidate); err == nil {
+		if _, err := fx.ListWorktrees(candidate); err == nil {
 			return candidate
 		}
 	}
@@ -337,20 +297,20 @@ func findFirstWorktree(repoDir string) string {
 	return ""
 }
 
-// scanForGitDirs recursively scans for directories containing .git up to maxDepth levels.
-func scanForGitDirs(rootDir string, maxDepth int) []string {
+// scanForGitDirsWithEffects recursively scans for directories containing .git up to maxDepth levels.
+func scanForGitDirsWithEffects(fx effects.Effects, rootDir string, maxDepth int) []string {
 	var candidates []string
-	scanLevel(rootDir, 0, maxDepth, &candidates)
+	scanLevelWithEffects(fx, rootDir, 0, maxDepth, &candidates)
 	return candidates
 }
 
-// scanLevel recursively scans a single level.
-func scanLevel(dir string, currentDepth, maxDepth int, candidates *[]string) {
+// scanLevelWithEffects recursively scans a single level.
+func scanLevelWithEffects(fx effects.Effects, dir string, currentDepth, maxDepth int, candidates *[]string) {
 	if currentDepth >= maxDepth {
 		return
 	}
 
-	entries, err := os.ReadDir(dir)
+	entries, err := fx.ReadDir(dir)
 	if err != nil {
 		return
 	}
@@ -363,20 +323,20 @@ func scanLevel(dir string, currentDepth, maxDepth int, candidates *[]string) {
 		entryPath := filepath.Join(dir, entry.Name())
 
 		// Check if this directory has .git
-		if _, err := os.Stat(filepath.Join(entryPath, ".git")); err == nil {
+		if fx.FileExists(filepath.Join(entryPath, ".git")) {
 			*candidates = append(*candidates, entryPath)
 		}
 
 		// Recurse to next level
-		scanLevel(entryPath, currentDepth+1, maxDepth, candidates)
+		scanLevelWithEffects(fx, entryPath, currentDepth+1, maxDepth, candidates)
 	}
 }
 
-// filterExistingWorktrees filters out worktrees whose paths don't exist on the filesystem.
-func filterExistingWorktrees(worktrees []git.Worktree) []git.Worktree {
+// filterExistingWorktreesWithEffects filters out worktrees whose paths don't exist on the filesystem.
+func filterExistingWorktreesWithEffects(fx effects.Effects, worktrees []git.Worktree) []git.Worktree {
 	var existing []git.Worktree
 	for _, wt := range worktrees {
-		if _, err := os.Stat(wt.Path); err == nil {
+		if fx.FileExists(wt.Path) {
 			existing = append(existing, wt)
 		}
 	}

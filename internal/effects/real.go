@@ -183,6 +183,18 @@ func (r *RealEffects) GetWorktreeRoot(repoRoot string) (string, error) {
 	return sprout.GetWorktreeRoot(repoRoot)
 }
 
+func (r *RealEffects) ReadDir(path string) ([]os.DirEntry, error) {
+	return os.ReadDir(path)
+}
+
+func (r *RealEffects) UserHomeDir() (string, error) {
+	return os.UserHomeDir()
+}
+
+func (r *RealEffects) GetWorktreeStatus(path string) git.WorktreeStatus {
+	return git.GetWorktreeStatus(path)
+}
+
 func (r *RealEffects) PromptTrustRepo(mainWorktreePath, hookType string, hookCommands []string) error {
 	// Check if stdin is a terminal (interactive mode)
 	if !term.IsTerminal(int(os.Stdin.Fd())) {

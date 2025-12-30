@@ -3,7 +3,6 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/m44rten1/sprout/internal/config"
@@ -19,17 +18,12 @@ import (
 func baseTestFxOpen(t *testing.T) *effects.TestEffects {
 	t.Helper()
 
-	// Save and restore XDG_DATA_HOME for test isolation
-	oldXDG := os.Getenv("XDG_DATA_HOME")
-	os.Setenv("XDG_DATA_HOME", "/test/data")
-	t.Cleanup(func() {
-		os.Setenv("XDG_DATA_HOME", oldXDG)
-	})
-
 	fx := effects.NewTestEffects()
 	fx.RepoRoot = "/test/repo"
 	fx.MainWorktreePath = "/test/repo"
 	fx.Config = &config.Config{Hooks: config.HooksConfig{}}
+	// Set SproutRoot to match the expected test paths (/test/data/sprout)
+	fx.SproutRoot = "/test/data/sprout"
 	return fx
 }
 

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/m44rten1/sprout/internal/effects"
 	"github.com/m44rten1/sprout/internal/git"
 	"github.com/stretchr/testify/assert"
 )
@@ -46,7 +47,10 @@ func TestFilterExistingWorktrees(t *testing.T) {
 		{Path: existingPath2, Branch: "branch3"},
 	}
 
-	result := filterExistingWorktrees(worktrees)
+	fx := effects.NewTestEffects()
+	fx.Files[existingPath1] = true
+	fx.Files[existingPath2] = true
+	result := filterExistingWorktreesWithEffects(fx, worktrees)
 
 	assert.Len(t, result, 2, "should filter out non-existing path")
 	assert.Equal(t, existingPath1, result[0].Path, "should preserve order")
@@ -152,7 +156,8 @@ func TestScanForGitDirs(t *testing.T) {
 			tmpDir := t.TempDir()
 			expected := tt.setup(t, tmpDir)
 
-			result := scanForGitDirs(tmpDir, tt.maxDepth)
+			fx := effects.NewRealEffects()
+			result := scanForGitDirsWithEffects(fx, tmpDir, tt.maxDepth)
 
 			// Use ElementsMatch since directory traversal order isn't guaranteed
 			assert.ElementsMatch(t, expected, result)
@@ -164,7 +169,8 @@ func TestScanForGitDirs_EmptyDirectory(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
-	result := scanForGitDirs(tmpDir, 3)
+	fx := effects.NewRealEffects()
+	result := scanForGitDirsWithEffects(fx, tmpDir, 3)
 	assert.Empty(t, result, "empty directory should return no results")
 }
 
@@ -174,6 +180,7 @@ func TestScanForGitDirs_MaxDepthZero(t *testing.T) {
 	tmpDir := t.TempDir()
 	mustWriteFile(t, filepath.Join(tmpDir, ".git"), "gitdir: /fake")
 
-	result := scanForGitDirs(tmpDir, 0)
+	fx := effects.NewRealEffects()
+	result := scanForGitDirsWithEffects(fx, tmpDir, 0)
 	assert.Empty(t, result, "maxDepth 0 should not traverse into any directories")
 }

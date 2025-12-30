@@ -66,4 +66,11 @@ type Effects interface {
 	// Sprout paths
 	GetSproutRoot() (string, error)
 	GetWorktreeRoot(repoRoot string) (string, error)
+
+	// Filesystem (additional)
+	ReadDir(path string) ([]os.DirEntry, error)
+	UserHomeDir() (string, error)
+
+	// Git status
+	GetWorktreeStatus(path string) git.WorktreeStatus
 }

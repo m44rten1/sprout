@@ -69,7 +69,7 @@ func autoRepairWorktrees() {
 	fx := effects.NewRealEffects()
 
 	// Imperative shell: discover repos using Effects
-	repos, err := collectAllRepos()
+	repos, err := collectAllReposWithEffects(fx)
 	if err != nil || len(repos) == 0 {
 		return // Silent failure - non-critical operation
 	}

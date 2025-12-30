@@ -86,7 +86,7 @@ func BuildOpenContext(fx effects.Effects, args []string, noHooks bool) (core.Ope
 	}
 
 	// Get sprout root once - used for filtering worktrees
-	sproutRoot, err := sprout.GetSproutRoot()
+	sproutRoot, err := fx.GetSproutRoot()
 	if err != nil {
 		return core.OpenContext{}, fmt.Errorf("failed to get sprout root: %w", err)
 	}
