@@ -117,6 +117,18 @@ func executeAction(action core.Action, fx Effects) error {
 	case core.Exit:
 		return ExitError{Code: a.Code}
 
+	case core.DeleteLocalBranch:
+		if err := fx.DeleteLocalBranch(a.RepoRoot, a.Branch, a.Force); err != nil {
+			return fmt.Errorf("delete local branch %s: %w", a.Branch, err)
+		}
+		return nil
+
+	case core.DeleteRemoteBranch:
+		if err := fx.DeleteRemoteBranch(a.RepoRoot, a.Remote, a.RemoteBranch); err != nil {
+			return fmt.Errorf("delete remote branch %s/%s: %w", a.Remote, a.RemoteBranch, err)
+		}
+		return nil
+
 	default:
 		return fmt.Errorf("unknown action type: %T", action)
 	}

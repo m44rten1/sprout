@@ -290,7 +290,7 @@ Open an existing worktree in an editor.
 
 ### 3. sprout remove [branch-or-path]
 
-Remove an existing worktree.
+Remove an existing worktree and optionally delete associated branches.
 
 **Modes:**
 
@@ -319,16 +319,58 @@ Remove an existing worktree.
 
 1. Validate the path is a sprout-managed worktree (under `~/.sprout`)
 2. Remove the worktree via `git worktree remove`
-3. Automatically run `git worktree prune` to clean up stale references
+3. If `-d` or `-D`: Delete local branch with safety checks
+4. If `--delete-remote`: Delete remote branch (fail-soft: warns on errors)
+5. Automatically run `git worktree prune` to clean up stale references
 
 **Flags:**
 
-- `--force`: Force removal even if the worktree has uncommitted changes
+- `-f` / `--force`: Force removal even if the worktree has uncommitted changes
+- `-d` / `--delete-branch`: Delete local branch (safe: requires branch to be merged into main)
+- `-D`: Force delete local branch even if not merged (implies `-d`)
+- `--delete-remote`: Also delete remote branch (requires `-d` or `-D`)
+- `--dry-run`: Preview what would be deleted without actually doing it
+
+**Branch Deletion Safety:**
+
+The `-d` flag performs a "safe" delete that verifies the branch is merged into main/master before deleting. This prevents accidental loss of unmerged work.
+
+The `-D` flag skips the merge check and force-deletes the branch, similar to `git branch -D`.
+
+When using `--delete-remote`:
+- sprout checks for a configured upstream branch first
+- If no upstream is configured, falls back to `origin/<branch>` with a notice
+- With `-d`: fails if there are unpushed commits
+- With `-D`: proceeds with a warning about unpushed commits
+
+**Examples:**
+
+```bash
+# Remove worktree only (default)
+sprout remove feature/login
+
+# Preview what would happen
+sprout remove -d --delete-remote feature/login --dry-run
+
+# Remove worktree + delete local branch (safe)
+sprout remove -d feature/login
+
+# Remove worktree + force delete local branch
+sprout remove -D feature/login
+
+# Remove worktree + local + remote branch
+sprout remove -d --delete-remote feature/login
+
+# Force remove dirty worktree + delete all branches
+sprout remove -f -D --delete-remote feature/login
+```
 
 **Notes:**
 
 - If the path is not a known worktree, sprout fails with a clear error message
 - sprout refuses to remove worktrees that aren't managed by sprout (safety feature)
+- Branch not found is not an error - prints a skip message and continues
+- Remote deletion failures are non-fatal - warns but completes local operations
 
 ⸻
 

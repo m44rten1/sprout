@@ -97,6 +97,31 @@ sprout remove
 
 Select the worktree you want to delete, and it's gone. Safe and sound.
 
+**Also delete the branch:**
+
+```bash
+# Delete local branch (safe: requires merge into main)
+sprout remove -d feature/done
+
+# Force delete local branch (even if not merged)
+sprout remove -D feature/abandoned
+
+# Delete local AND remote branch
+sprout remove -d --delete-remote feature/merged-pr
+```
+
+**Preview what would happen:**
+
+```bash
+sprout remove -D --delete-remote feature/done --dry-run
+```
+
+**Force remove worktree with uncommitted changes:**
+
+```bash
+sprout remove -f feature/dirty
+```
+
 ### List worktrees
 
 See what you've got growing.

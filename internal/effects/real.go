@@ -249,3 +249,29 @@ func (r *RealEffects) PromptTrustRepo(mainWorktreePath, hookType string, hookCom
 	// User declined
 	return fmt.Errorf("repository not trusted: user declined")
 }
+
+// Branch operations
+
+func (r *RealEffects) IsBranchMergedIntoMain(repoRoot, branch string) (bool, error) {
+	return git.IsBranchMergedIntoMain(repoRoot, branch)
+}
+
+func (r *RealEffects) GetBranchUpstream(repoRoot, branch string) git.BranchUpstream {
+	return git.GetBranchUpstream(repoRoot, branch)
+}
+
+func (r *RealEffects) HasUnpushedCommits(repoRoot, branch, remote, remoteBranch string) (bool, error) {
+	return git.HasUnpushedCommits(repoRoot, branch, remote, remoteBranch)
+}
+
+func (r *RealEffects) DeleteLocalBranch(repoRoot, branch string, force bool) error {
+	return git.DeleteLocalBranch(repoRoot, branch, force)
+}
+
+func (r *RealEffects) DeleteRemoteBranch(repoRoot, remote, branch string) error {
+	return git.DeleteRemoteBranch(repoRoot, remote, branch)
+}
+
+func (r *RealEffects) RemoteBranchExistsOn(repoRoot, remote, branch string) (bool, error) {
+	return git.RemoteBranchExists(repoRoot, remote, branch)
+}

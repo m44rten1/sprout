@@ -328,3 +328,112 @@ func GetWorktreeStatus(path string) WorktreeStatus {
 
 	return status
 }
+
+// IsBranchMergedIntoMain checks if a branch is fully merged into the default branch (main/master).
+// Returns true if the branch has no commits that aren't in the default branch.
+func IsBranchMergedIntoMain(repoRoot, branch string) (bool, error) {
+	defaultBranch, err := GetDefaultBranch(repoRoot)
+	if err != nil {
+		return false, err
+	}
+
+	// Check origin/<default> first, fall back to local
+	baseRef := "origin/" + defaultBranch
+	if _, err := RunGitCommand(repoRoot, "rev-parse", "--verify", baseRef); err != nil {
+		baseRef = defaultBranch
+	}
+
+	// Count commits in branch not in base
+	out, err := RunGitCommand(repoRoot, "rev-list", "--count", baseRef+".."+branch)
+	if err != nil {
+		return false, err
+	}
+
+	count := 0
+	fmt.Sscanf(out, "%d", &count)
+	return count == 0, nil
+}
+
+// DeleteLocalBranch deletes a local branch.
+// If force is true, uses -D (force delete even if unmerged).
+// If force is false, uses -d (safe delete, fails if unmerged).
+func DeleteLocalBranch(repoRoot, branch string, force bool) error {
+	flag := "-d"
+	if force {
+		flag = "-D"
+	}
+	_, err := RunGitCommand(repoRoot, "branch", flag, branch)
+	return err
+}
+
+// BranchUpstream contains information about a branch's upstream tracking.
+type BranchUpstream struct {
+	Remote       string // e.g., "origin"
+	RemoteBranch string // e.g., "feature/login"
+	Configured   bool   // Whether upstream is explicitly configured
+}
+
+// GetBranchUpstream returns the upstream tracking info for a branch.
+// If no upstream is configured, returns Configured=false with Remote="origin" as fallback.
+func GetBranchUpstream(repoRoot, branch string) BranchUpstream {
+	// Try to get the configured upstream
+	out, err := RunGitCommand(repoRoot, "config", "--get", "branch."+branch+".remote")
+	if err == nil && strings.TrimSpace(out) != "" {
+		remote := strings.TrimSpace(out)
+		// Get the merge ref
+		mergeRef, err := RunGitCommand(repoRoot, "config", "--get", "branch."+branch+".merge")
+		if err == nil {
+			// mergeRef is like "refs/heads/feature/login"
+			remoteBranch := strings.TrimPrefix(mergeRef, "refs/heads/")
+			return BranchUpstream{
+				Remote:       remote,
+				RemoteBranch: remoteBranch,
+				Configured:   true,
+			}
+		}
+	}
+
+	// No upstream configured, use origin as fallback
+	return BranchUpstream{
+		Remote:       "origin",
+		RemoteBranch: branch,
+		Configured:   false,
+	}
+}
+
+// RemoteBranchExists checks if a remote branch exists.
+func RemoteBranchExists(repoRoot, remote, branch string) (bool, error) {
+	ref := remote + "/" + branch
+	_, err := RunGitCommand(repoRoot, "rev-parse", "--verify", ref)
+	if err != nil {
+		return false, nil
+	}
+	return true, nil
+}
+
+// DeleteRemoteBranch deletes a branch from a remote.
+// Uses: git push <remote> --delete <branch>
+func DeleteRemoteBranch(repoRoot, remote, branch string) error {
+	_, err := RunGitCommand(repoRoot, "push", remote, "--delete", branch)
+	return err
+}
+
+// HasUnpushedCommits checks if a local branch has commits not on the remote.
+func HasUnpushedCommits(repoRoot, branch, remote, remoteBranch string) (bool, error) {
+	remoteRef := remote + "/" + remoteBranch
+	// Check if remote ref exists
+	if _, err := RunGitCommand(repoRoot, "rev-parse", "--verify", remoteRef); err != nil {
+		// Remote branch doesn't exist, so all commits are "unpushed"
+		return true, nil
+	}
+
+	// Count commits in local not in remote
+	out, err := RunGitCommand(repoRoot, "rev-list", "--count", remoteRef+".."+branch)
+	if err != nil {
+		return false, err
+	}
+
+	count := 0
+	fmt.Sscanf(out, "%d", &count)
+	return count > 0, nil
+}

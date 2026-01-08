@@ -16,7 +16,7 @@ func TestBuildRemoveContext(t *testing.T) {
 		name       string
 		setupFx    func(*effects.TestEffects)
 		args       []string
-		force      bool
+		flags      RemoveFlags
 		wantCtx    *core.RemoveContext
 		wantErr    bool
 		assertions func(t *testing.T, fx *effects.TestEffects)
@@ -33,13 +33,14 @@ func TestBuildRemoveContext(t *testing.T) {
 				fx.Files["/test/repo/.sprout/feature"] = true
 			},
 			args:  []string{"/test/repo/.sprout/feature"},
-			force: false,
+			flags: RemoveFlags{Force: false},
 			wantCtx: &core.RemoveContext{
 				ArgProvided: true,
 				Arg:         "/test/repo/.sprout/feature",
 				RepoRoot:    "/test/repo",
 				SproutRoot:  "/test/repo/.sprout",
 				TargetPath:  "/test/repo/.sprout/feature",
+				BranchName:  "feature",
 				Force:       false,
 			},
 			wantErr: false,
@@ -55,13 +56,14 @@ func TestBuildRemoveContext(t *testing.T) {
 				}
 			},
 			args:  []string{"feature"},
-			force: true,
+			flags: RemoveFlags{Force: true},
 			wantCtx: &core.RemoveContext{
 				ArgProvided: true,
 				Arg:         "feature",
 				RepoRoot:    "/test/repo",
 				SproutRoot:  "/test/repo/.sprout",
 				TargetPath:  "/test/repo/.sprout/feature",
+				BranchName:  "feature",
 				Force:       true,
 			},
 			wantErr: false,
@@ -79,13 +81,14 @@ func TestBuildRemoveContext(t *testing.T) {
 				fx.SelectedWorktreeIndex = 1 // Select "bugfix"
 			},
 			args:  []string{},
-			force: false,
+			flags: RemoveFlags{Force: false},
 			wantCtx: &core.RemoveContext{
 				ArgProvided: false,
 				Arg:         "",
 				RepoRoot:    "/test/repo",
 				SproutRoot:  "/test/repo/.sprout",
 				TargetPath:  "/test/repo/.sprout/bugfix",
+				BranchName:  "bugfix",
 				Force:       false,
 			},
 			wantErr: false,
@@ -104,7 +107,7 @@ func TestBuildRemoveContext(t *testing.T) {
 				fx.SelectionError = fmt.Errorf("cancelled")
 			},
 			args:    []string{},
-			force:   false,
+			flags:   RemoveFlags{},
 			wantCtx: nil,
 			wantErr: true,
 		},
@@ -118,7 +121,7 @@ func TestBuildRemoveContext(t *testing.T) {
 				}
 			},
 			args:    []string{},
-			force:   false,
+			flags:   RemoveFlags{},
 			wantCtx: nil,
 			wantErr: true,
 		},
@@ -132,7 +135,7 @@ func TestBuildRemoveContext(t *testing.T) {
 				}
 			},
 			args:    []string{"nonexistent"},
-			force:   false,
+			flags:   RemoveFlags{},
 			wantCtx: nil,
 			wantErr: true,
 			assertions: func(t *testing.T, fx *effects.TestEffects) {
@@ -146,7 +149,7 @@ func TestBuildRemoveContext(t *testing.T) {
 				fx.GetRepoRootErr = fmt.Errorf("not a git repo")
 			},
 			args:    []string{},
-			force:   false,
+			flags:   RemoveFlags{},
 			wantCtx: nil,
 			wantErr: true,
 		},
@@ -157,7 +160,7 @@ func TestBuildRemoveContext(t *testing.T) {
 				fx.GetWorktreeRootErr = fmt.Errorf("sprout root error")
 			},
 			args:    []string{},
-			force:   false,
+			flags:   RemoveFlags{},
 			wantCtx: nil,
 			wantErr: true,
 		},
@@ -169,7 +172,7 @@ func TestBuildRemoveContext(t *testing.T) {
 				fx.ListWorktreesErr = fmt.Errorf("git error")
 			},
 			args:    []string{},
-			force:   false,
+			flags:   RemoveFlags{},
 			wantCtx: nil,
 			wantErr: true,
 		},
@@ -180,7 +183,7 @@ func TestBuildRemoveContext(t *testing.T) {
 			fx := effects.NewTestEffects()
 			tt.setupFx(fx)
 
-			got, err := BuildRemoveContext(fx, tt.args, tt.force)
+			got, err := BuildRemoveContext(fx, tt.args, tt.flags)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -193,6 +196,7 @@ func TestBuildRemoveContext(t *testing.T) {
 				assert.Equal(t, tt.wantCtx.RepoRoot, got.RepoRoot)
 				assert.Equal(t, tt.wantCtx.SproutRoot, got.SproutRoot)
 				assert.Equal(t, tt.wantCtx.TargetPath, got.TargetPath)
+				assert.Equal(t, tt.wantCtx.BranchName, got.BranchName)
 				assert.Equal(t, tt.wantCtx.Force, got.Force)
 				// Note: Worktrees field not checked here - it's passed through
 				// from fx.Worktrees but the specific content doesn't affect behavior
@@ -211,7 +215,7 @@ func TestRemoveCommand_EndToEnd(t *testing.T) {
 		name       string
 		setupFx    func(*effects.TestEffects)
 		args       []string
-		force      bool
+		flags      RemoveFlags
 		assertions func(t *testing.T, fx *effects.TestEffects)
 	}{
 		{
@@ -225,7 +229,7 @@ func TestRemoveCommand_EndToEnd(t *testing.T) {
 				}
 			},
 			args:  []string{"feature"},
-			force: false,
+			flags: RemoveFlags{},
 			assertions: func(t *testing.T, fx *effects.TestEffects) {
 				// Should have run git commands: remove + prune
 				require.Len(t, fx.GitCommands, 2)
@@ -256,7 +260,7 @@ func TestRemoveCommand_EndToEnd(t *testing.T) {
 				fx.Files["/test/repo/.sprout/feature"] = true
 			},
 			args:  []string{"/test/repo/.sprout/feature"},
-			force: false,
+			flags: RemoveFlags{},
 			assertions: func(t *testing.T, fx *effects.TestEffects) {
 				require.Len(t, fx.GitCommands, 2)
 				assert.Equal(t, []string{"worktree", "remove", "/test/repo/.sprout/feature"}, fx.GitCommands[0].Args)
@@ -272,7 +276,7 @@ func TestRemoveCommand_EndToEnd(t *testing.T) {
 				}
 			},
 			args:  []string{"feature"},
-			force: true,
+			flags: RemoveFlags{Force: true},
 			assertions: func(t *testing.T, fx *effects.TestEffects) {
 				require.Len(t, fx.GitCommands, 2)
 				// Should have --force flag
@@ -290,7 +294,7 @@ func TestRemoveCommand_EndToEnd(t *testing.T) {
 				fx.Files["/some/other/path"] = true
 			},
 			args:  []string{"/some/other/path"},
-			force: false,
+			flags: RemoveFlags{},
 			assertions: func(t *testing.T, fx *effects.TestEffects) {
 				// Should not have executed any git commands
 				assert.Len(t, fx.GitCommands, 0)
@@ -312,7 +316,7 @@ func TestRemoveCommand_EndToEnd(t *testing.T) {
 				fx.SelectedWorktreeIndex = 0 // Select feature worktree (filtered, so index 0)
 			},
 			args:  []string{},
-			force: false,
+			flags: RemoveFlags{},
 			assertions: func(t *testing.T, fx *effects.TestEffects) {
 				// Should have called SelectWorktree
 				assert.Equal(t, 1, fx.SelectWorktreeCalls)
@@ -330,7 +334,7 @@ func TestRemoveCommand_EndToEnd(t *testing.T) {
 			tt.setupFx(fx)
 
 			// Build context
-			ctx, err := BuildRemoveContext(fx, tt.args, tt.force)
+			ctx, err := BuildRemoveContext(fx, tt.args, tt.flags)
 			require.NoError(t, err, "context building should succeed in all current test cases")
 
 			// Plan

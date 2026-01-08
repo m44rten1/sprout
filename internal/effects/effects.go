@@ -60,6 +60,14 @@ type Effects interface {
 	// RemoteBranchExists checks if a branch exists on the remote (automatically prepends "origin/")
 	RemoteBranchExists(repoRoot, branch string) (bool, error)
 
+	// Branch operations
+	IsBranchMergedIntoMain(repoRoot, branch string) (bool, error)
+	GetBranchUpstream(repoRoot, branch string) git.BranchUpstream
+	HasUnpushedCommits(repoRoot, branch, remote, remoteBranch string) (bool, error)
+	DeleteLocalBranch(repoRoot, branch string, force bool) error
+	DeleteRemoteBranch(repoRoot, remote, branch string) error
+	RemoteBranchExistsOn(repoRoot, remote, branch string) (bool, error)
+
 	// Path calculation
 	GetWorktreePath(repoPath, branch string) (string, error)
 

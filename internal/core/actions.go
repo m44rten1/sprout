@@ -130,6 +130,24 @@ type Exit struct {
 
 func (Exit) isAction() {}
 
+// DeleteLocalBranch deletes a local git branch.
+type DeleteLocalBranch struct {
+	RepoRoot string
+	Branch   string
+	Force    bool // -D vs -d
+}
+
+func (DeleteLocalBranch) isAction() {}
+
+// DeleteRemoteBranch deletes a remote git branch.
+type DeleteRemoteBranch struct {
+	RepoRoot     string
+	Remote       string // e.g., "origin"
+	RemoteBranch string // e.g., "feature/login"
+}
+
+func (DeleteRemoteBranch) isAction() {}
+
 // Plan represents a sequence of actions to execute.
 type Plan struct {
 	Actions []Action

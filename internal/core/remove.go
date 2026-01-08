@@ -8,8 +8,20 @@ import (
 
 // Message constants for remove command
 const (
-	msgRemovedWorktree = "Removed worktree at %s"
-	errRefuseNonSprout = "Refusing to remove non-sprout worktree: %s"
+	msgRemovedWorktree          = "Removed worktree at %s"
+	msgWouldRemoveWorktree      = "Would remove worktree at %s"
+	msgDeletedLocalBranch       = "Deleted local branch %s"
+	msgWouldDeleteLocalBranch   = "Would delete local branch %s"
+	msgDeletedLocalBranchForce  = "Deleted local branch %s (was not merged into main)"
+	msgDeletedRemoteBranch      = "Deleted remote branch %s/%s"
+	msgWouldDeleteRemoteBranch  = "Would delete remote branch %s/%s"
+	msgBranchNotFound           = "Branch %s not found, skipping branch deletion"
+	msgBranchNotMerged          = "Branch %s is not merged into main.\nUse -D to force delete, or merge it first."
+	msgRemoteBranchNotFound     = "Remote branch %s/%s not found, skipping"
+	msgNoUpstreamAssumeOrigin   = "No upstream configured for %s, assuming %s/%s"
+	msgUnpushedCommitsWarning   = "Warning: branch %s has unpushed commits"
+	errRefuseNonSprout          = "Refusing to remove non-sprout worktree: %s"
+	errDeleteRemoteRequiresBranch = "--delete-remote requires -d or -D flag"
 )
 
 // RemoveContext contains all inputs needed to plan a remove command.
@@ -32,20 +44,33 @@ type RemoveContext struct {
 	TargetPath string // Final worktree path to remove
 
 	// Flags
-	Force bool // Force removal even if worktree has uncommitted changes
+	Force        bool // Force removal even if worktree has uncommitted changes (-f/--force)
+	DeleteBranch bool // Delete local branch after removing worktree (-d)
+	ForceDelete  bool // Force delete local branch even if not merged (-D, implies DeleteBranch)
+	DeleteRemote bool // Also delete remote branch (--delete-remote)
+	DryRun       bool // Preview actions without executing (--dry-run)
+
+	// Branch info (populated by shell layer after gathering context)
+	BranchName         string // Branch associated with the worktree
+	BranchExists       bool   // Whether the local branch exists
+	IsMerged           bool   // Whether branch is merged into main
+	RemoteName         string // e.g., "origin"
+	RemoteBranch       string // e.g., "feature/login"
+	RemoteBranchExists bool   // Whether the remote branch exists
+	HasUpstream        bool   // Whether upstream is configured
+	HasUnpushed        bool   // Whether branch has unpushed commits
 }
 
-// PlanRemoveCommand creates a plan to remove a worktree.
+// PlanRemoveCommand creates a plan to remove a worktree and optionally delete branches.
 //
 // The command flow is:
 // 1. Validate target path is under a sprout root (safety check)
-// 2. Remove the worktree using git
-// 3. Print success message
-// 4. Prune stale worktree references
-//
-// Note: Currently prune failures will fail the entire plan. To make this truly
-// "best-effort" (warn but continue), we would need a RunGitCommandBestEffort
-// action type that prints warnings instead of propagating errors.
+// 2. Validate flag combinations (--delete-remote requires -d or -D)
+// 3. If dry-run: return plan with preview messages only
+// 4. Remove the worktree using git
+// 5. If -d or -D: attempt to delete local branch with safety checks
+// 6. If --delete-remote: attempt to delete remote branch (fail-soft)
+// 7. Prune stale worktree references
 //
 // Returns an error plan if validation fails.
 func PlanRemoveCommand(ctx RemoveContext) Plan {
@@ -64,6 +89,20 @@ func PlanRemoveCommand(ctx RemoveContext) Plan {
 		return errorPlan(fmt.Errorf(errRefuseNonSprout, ctx.TargetPath))
 	}
 
+	// Validate flag combinations
+	if ctx.DeleteRemote && !ctx.DeleteBranch && !ctx.ForceDelete {
+		return errorPlan(fmt.Errorf(errDeleteRemoteRequiresBranch))
+	}
+
+	// -D implies -d
+	wantDeleteBranch := ctx.DeleteBranch || ctx.ForceDelete
+	forceDeleteBranch := ctx.ForceDelete
+
+	// Dry-run mode: just show what would happen
+	if ctx.DryRun {
+		return planDryRun(ctx, wantDeleteBranch)
+	}
+
 	// Build action sequence
 	actions := []Action{
 		// Remove the worktree
@@ -75,14 +114,146 @@ func PlanRemoveCommand(ctx RemoveContext) Plan {
 		PrintMessage{
 			Msg: fmt.Sprintf(msgRemovedWorktree, ctx.TargetPath),
 		},
-		// Prune stale worktree references
-		RunGitCommand{
-			Dir:  ctx.RepoRoot,
-			Args: []string{"worktree", "prune"},
-		},
+	}
+
+	// Local branch deletion
+	if wantDeleteBranch {
+		actions = append(actions, planLocalBranchDeletion(ctx, forceDeleteBranch)...)
+	}
+
+	// Remote branch deletion
+	if ctx.DeleteRemote && wantDeleteBranch {
+		actions = append(actions, planRemoteBranchDeletion(ctx, forceDeleteBranch)...)
+	}
+
+	// Prune stale worktree references
+	actions = append(actions, RunGitCommand{
+		Dir:  ctx.RepoRoot,
+		Args: []string{"worktree", "prune"},
+	})
+
+	return Plan{Actions: actions}
+}
+
+// planDryRun creates a plan that only prints what would happen.
+func planDryRun(ctx RemoveContext, wantDeleteBranch bool) Plan {
+	actions := []Action{
+		PrintMessage{Msg: fmt.Sprintf(msgWouldRemoveWorktree, ctx.TargetPath)},
+	}
+
+	if wantDeleteBranch {
+		if !ctx.BranchExists {
+			actions = append(actions, PrintMessage{
+				Msg: fmt.Sprintf(msgBranchNotFound, ctx.BranchName),
+			})
+		} else {
+			actions = append(actions, PrintMessage{
+				Msg: fmt.Sprintf(msgWouldDeleteLocalBranch, ctx.BranchName),
+			})
+		}
+	}
+
+	if ctx.DeleteRemote && wantDeleteBranch && ctx.BranchExists {
+		if !ctx.RemoteBranchExists {
+			actions = append(actions, PrintMessage{
+				Msg: fmt.Sprintf(msgRemoteBranchNotFound, ctx.RemoteName, ctx.RemoteBranch),
+			})
+		} else {
+			actions = append(actions, PrintMessage{
+				Msg: fmt.Sprintf(msgWouldDeleteRemoteBranch, ctx.RemoteName, ctx.RemoteBranch),
+			})
+		}
 	}
 
 	return Plan{Actions: actions}
+}
+
+// planLocalBranchDeletion creates actions for deleting the local branch.
+func planLocalBranchDeletion(ctx RemoveContext, forceDelete bool) []Action {
+	// Branch doesn't exist: print skip message
+	if !ctx.BranchExists {
+		return []Action{
+			PrintMessage{Msg: fmt.Sprintf(msgBranchNotFound, ctx.BranchName)},
+		}
+	}
+
+	// Check if branch is merged (unless force delete)
+	if !forceDelete && !ctx.IsMerged {
+		return []Action{
+			PrintError{Msg: fmt.Sprintf(msgBranchNotMerged, ctx.BranchName)},
+			Exit{Code: 1},
+		}
+	}
+
+	// Delete the branch
+	actions := []Action{
+		DeleteLocalBranch{
+			RepoRoot: ctx.RepoRoot,
+			Branch:   ctx.BranchName,
+			Force:    forceDelete,
+		},
+	}
+
+	// Success message
+	if forceDelete && !ctx.IsMerged {
+		actions = append(actions, PrintMessage{
+			Msg: fmt.Sprintf(msgDeletedLocalBranchForce, ctx.BranchName),
+		})
+	} else {
+		actions = append(actions, PrintMessage{
+			Msg: fmt.Sprintf(msgDeletedLocalBranch, ctx.BranchName),
+		})
+	}
+
+	return actions
+}
+
+// planRemoteBranchDeletion creates actions for deleting the remote branch.
+func planRemoteBranchDeletion(ctx RemoveContext, forceDelete bool) []Action {
+	var actions []Action
+
+	// Print upstream fallback notice if applicable
+	if !ctx.HasUpstream {
+		actions = append(actions, PrintMessage{
+			Msg: fmt.Sprintf(msgNoUpstreamAssumeOrigin, ctx.BranchName, ctx.RemoteName, ctx.RemoteBranch),
+		})
+	}
+
+	// Remote branch doesn't exist: print skip message
+	if !ctx.RemoteBranchExists {
+		return append(actions, PrintMessage{
+			Msg: fmt.Sprintf(msgRemoteBranchNotFound, ctx.RemoteName, ctx.RemoteBranch),
+		})
+	}
+
+	// Check for unpushed commits (unless force delete)
+	if !forceDelete && ctx.HasUnpushed {
+		return append(actions,
+			PrintError{Msg: fmt.Sprintf("Branch %s has unpushed commits.\nUse -D --delete-remote to force delete.", ctx.BranchName)},
+			Exit{Code: 1},
+		)
+	}
+
+	// Warn about unpushed commits if force deleting
+	if forceDelete && ctx.HasUnpushed {
+		actions = append(actions, PrintMessage{
+			Msg: fmt.Sprintf(msgUnpushedCommitsWarning, ctx.BranchName),
+		})
+	}
+
+	// Delete the remote branch
+	actions = append(actions,
+		DeleteRemoteBranch{
+			RepoRoot:     ctx.RepoRoot,
+			Remote:       ctx.RemoteName,
+			RemoteBranch: ctx.RemoteBranch,
+		},
+		PrintMessage{
+			Msg: fmt.Sprintf(msgDeletedRemoteBranch, ctx.RemoteName, ctx.RemoteBranch),
+		},
+	)
+
+	return actions
 }
 
 // buildRemoveWorktreeArgs constructs arguments for 'git worktree remove'.

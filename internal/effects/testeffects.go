@@ -28,6 +28,17 @@ type TestEffects struct {
 	LocalBranches  map[string]bool // branch name -> exists locally
 	RemoteBranches map[string]bool // branch name -> exists on remote
 
+	// Branch operations mocking
+	BranchMergedIntoMain      map[string]bool               // branch -> is merged into main
+	BranchUpstreams           map[string]git.BranchUpstream // branch -> upstream info
+	BranchHasUnpushedCommits  map[string]bool               // branch -> has unpushed commits
+	IsBranchMergedIntoMainErr error
+	HasUnpushedCommitsErr     error
+	DeleteLocalBranchErr      error
+	DeleteRemoteBranchErr     error
+	RemoteBranchExistsOnMap   map[string]bool // "remote/branch" -> exists
+	RemoteBranchExistsOnErr   error
+
 	// Worktree path calculation
 	WorktreePaths      map[string]string // branch -> path mapping
 	GetWorktreePathErr error
@@ -39,9 +50,9 @@ type TestEffects struct {
 	GetWorktreeRootErr error
 
 	// Filesystem (additional)
-	DirEntries        map[string][]os.DirEntry // path -> entries
-	UserHome          string
-	WorktreeStatuses  map[string]git.WorktreeStatus // path -> status
+	DirEntries       map[string][]os.DirEntry // path -> entries
+	UserHome         string
+	WorktreeStatuses map[string]git.WorktreeStatus // path -> status
 
 	// Error injection - set these to simulate failures
 	GetRepoRootErr         error
@@ -67,54 +78,97 @@ type TestEffects struct {
 	SelectionError        error
 
 	// Call counters (structured tracking)
-	GetRepoRootCalls         int
-	GetMainWorktreePathCalls int
-	ListWorktreesCalls       int
-	ListBranchesCalls        int
-	RunGitCommandCalls       int
-	FileExistsCalls          int
-	MkdirAllCalls            int
-	LoadConfigCalls          int
-	IsTrustedCalls           int
-	TrustRepoCalls           int
-	UntrustRepoCalls         int
-	OpenEditorCalls          int
-	PrintCalls               int
-	PrintErrCalls            int
-	SelectBranchCalls        int
-	SelectWorktreeCalls      int
-	RunHooksCalls            int
-	LocalBranchExistsCalls   int
-	RemoteBranchExistsCalls  int
-	GetWorktreePathCalls     int
-	GetSproutRootCalls       int
-	GetWorktreeRootCalls     int
-	PromptTrustRepoCalls     int
-	ReadDirCalls             int
-	UserHomeDirCalls         int
-	GetWorktreeStatusCalls   int
+	GetRepoRootCalls            int
+	GetMainWorktreePathCalls    int
+	ListWorktreesCalls          int
+	ListBranchesCalls           int
+	RunGitCommandCalls          int
+	FileExistsCalls             int
+	MkdirAllCalls               int
+	LoadConfigCalls             int
+	IsTrustedCalls              int
+	TrustRepoCalls              int
+	UntrustRepoCalls            int
+	OpenEditorCalls             int
+	PrintCalls                  int
+	PrintErrCalls               int
+	SelectBranchCalls           int
+	SelectWorktreeCalls         int
+	RunHooksCalls               int
+	LocalBranchExistsCalls      int
+	RemoteBranchExistsCalls     int
+	GetWorktreePathCalls        int
+	GetSproutRootCalls          int
+	GetWorktreeRootCalls        int
+	PromptTrustRepoCalls        int
+	ReadDirCalls                int
+	UserHomeDirCalls            int
+	GetWorktreeStatusCalls      int
+	IsBranchMergedIntoMainCalls int
+	GetBranchUpstreamCalls      int
+	HasUnpushedCommitsCalls     int
+	DeleteLocalBranchCallCount  int
+	DeleteRemoteBranchCallCount int
+	RemoteBranchExistsOnCalls   int
 
 	// Call tracking (captured side effects and arguments)
-	ListWorktreesArgs         []string   // repoRoot args passed to ListWorktrees
-	ListBranchesArgs          []string   // repoRoot args passed to ListBranches
-	LoadConfigCurrentArgs     []string   // currentPath args passed to LoadConfig
-	LoadConfigMainArgs        []string   // mainPath args passed to LoadConfig
-	IsTrustedArgs             []string   // repoRoot args passed to IsTrusted
-	TrustRepoRepos            []string   // Repos that had TrustRepo called
-	UntrustRepoRepos          []string   // Repos that had UntrustRepo called
-	PrintedMsgs               []string   // Messages printed via Print
-	PrintedErrs               []string   // Messages printed via PrintErr
-	GitCommands               []GitCmd   // Git commands executed
-	OpenedPaths               []string   // Paths opened in editor
-	CreatedDirs               []string   // Directories created via MkdirAll
-	RunHooksInvocations       []HookCall // Hooks that were run
-	LocalBranchExistsQueries  []BranchQuery
-	RemoteBranchExistsQueries []BranchQuery
-	GetWorktreePathQueries    []WorktreePathQuery
+	ListWorktreesArgs          []string   // repoRoot args passed to ListWorktrees
+	ListBranchesArgs           []string   // repoRoot args passed to ListBranches
+	LoadConfigCurrentArgs      []string   // currentPath args passed to LoadConfig
+	LoadConfigMainArgs         []string   // mainPath args passed to LoadConfig
+	IsTrustedArgs              []string   // repoRoot args passed to IsTrusted
+	TrustRepoRepos             []string   // Repos that had TrustRepo called
+	UntrustRepoRepos           []string   // Repos that had UntrustRepo called
+	PrintedMsgs                []string   // Messages printed via Print
+	PrintedErrs                []string   // Messages printed via PrintErr
+	GitCommands                []GitCmd   // Git commands executed
+	OpenedPaths                []string   // Paths opened in editor
+	CreatedDirs                []string   // Directories created via MkdirAll
+	RunHooksInvocations        []HookCall // Hooks that were run
+	LocalBranchExistsQueries   []BranchQuery
+	RemoteBranchExistsQueries  []BranchQuery
+	GetWorktreePathQueries     []WorktreePathQuery
 	GetWorktreeRootArgs        []string // repoRoot args passed to GetWorktreeRoot
 	PromptTrustRepoInvocations []PromptTrustCall
 	ReadDirArgs                []string // path args passed to ReadDir
 	GetWorktreeStatusArgs      []string // path args passed to GetWorktreeStatus
+
+	// Branch operations tracking
+	IsBranchMergedIntoMainQueries []BranchQuery
+	GetBranchUpstreamQueries      []BranchQuery
+	HasUnpushedCommitsQueries     []UnpushedCommitsQuery
+	DeleteLocalBranchCalls        []DeleteLocalBranchCall
+	DeleteRemoteBranchCalls       []DeleteRemoteBranchCall
+	RemoteBranchExistsOnQueries   []RemoteBranchExistsOnQuery
+}
+
+// UnpushedCommitsQuery represents a HasUnpushedCommits check.
+type UnpushedCommitsQuery struct {
+	RepoRoot     string
+	Branch       string
+	Remote       string
+	RemoteBranch string
+}
+
+// DeleteLocalBranchCall represents a local branch deletion.
+type DeleteLocalBranchCall struct {
+	RepoRoot string
+	Branch   string
+	Force    bool
+}
+
+// DeleteRemoteBranchCall represents a remote branch deletion.
+type DeleteRemoteBranchCall struct {
+	RepoRoot string
+	Remote   string
+	Branch   string
+}
+
+// RemoteBranchExistsOnQuery represents a remote branch existence check.
+type RemoteBranchExistsOnQuery struct {
+	RepoRoot string
+	Remote   string
+	Branch   string
 }
 
 // GitCmd represents a recorded git command execution.
@@ -154,33 +208,33 @@ type PromptTrustCall struct {
 // NewTestEffects creates a new TestEffects with sensible defaults.
 func NewTestEffects() *TestEffects {
 	return &TestEffects{
-		RepoRoot:                  "/test/repo",
-		MainWorktreePath:          "/test/repo",
-		Worktrees:                 []git.Worktree{},
-		Branches:                  []git.Branch{},
-		Config:                    &config.Config{},
-		TrustedRepos:              make(map[string]bool),
-		Files:                     make(map[string]bool),
-		GitCommandOutput:          make(map[string]string),
-		GitCommandErrors:          make(map[string]error),
-		LocalBranches:             make(map[string]bool),
-		RemoteBranches:            make(map[string]bool),
-		WorktreePaths:             make(map[string]string),
-		ListWorktreesArgs:         []string{},
-		ListBranchesArgs:          []string{},
-		LoadConfigCurrentArgs:     []string{},
-		LoadConfigMainArgs:        []string{},
-		IsTrustedArgs:             []string{},
-		TrustRepoRepos:            []string{},
-		PrintedMsgs:               []string{},
-		PrintedErrs:               []string{},
-		GitCommands:               []GitCmd{},
-		OpenedPaths:               []string{},
-		CreatedDirs:               []string{},
-		RunHooksInvocations:       []HookCall{},
-		LocalBranchExistsQueries:  []BranchQuery{},
-		RemoteBranchExistsQueries: []BranchQuery{},
-		GetWorktreePathQueries:    []WorktreePathQuery{},
+		RepoRoot:                   "/test/repo",
+		MainWorktreePath:           "/test/repo",
+		Worktrees:                  []git.Worktree{},
+		Branches:                   []git.Branch{},
+		Config:                     &config.Config{},
+		TrustedRepos:               make(map[string]bool),
+		Files:                      make(map[string]bool),
+		GitCommandOutput:           make(map[string]string),
+		GitCommandErrors:           make(map[string]error),
+		LocalBranches:              make(map[string]bool),
+		RemoteBranches:             make(map[string]bool),
+		WorktreePaths:              make(map[string]string),
+		ListWorktreesArgs:          []string{},
+		ListBranchesArgs:           []string{},
+		LoadConfigCurrentArgs:      []string{},
+		LoadConfigMainArgs:         []string{},
+		IsTrustedArgs:              []string{},
+		TrustRepoRepos:             []string{},
+		PrintedMsgs:                []string{},
+		PrintedErrs:                []string{},
+		GitCommands:                []GitCmd{},
+		OpenedPaths:                []string{},
+		CreatedDirs:                []string{},
+		RunHooksInvocations:        []HookCall{},
+		LocalBranchExistsQueries:   []BranchQuery{},
+		RemoteBranchExistsQueries:  []BranchQuery{},
+		GetWorktreePathQueries:     []WorktreePathQuery{},
 		GetWorktreeRootArgs:        []string{},
 		PromptTrustRepoInvocations: []PromptTrustCall{},
 		SproutRoot:                 "/home/user/.local/share/sprout",
@@ -190,6 +244,17 @@ func NewTestEffects() *TestEffects {
 		WorktreeStatuses:           make(map[string]git.WorktreeStatus),
 		ReadDirArgs:                []string{},
 		GetWorktreeStatusArgs:      []string{},
+		// Branch operations
+		BranchMergedIntoMain:          make(map[string]bool),
+		BranchUpstreams:               make(map[string]git.BranchUpstream),
+		BranchHasUnpushedCommits:      make(map[string]bool),
+		RemoteBranchExistsOnMap:       make(map[string]bool),
+		IsBranchMergedIntoMainQueries: []BranchQuery{},
+		GetBranchUpstreamQueries:      []BranchQuery{},
+		HasUnpushedCommitsQueries:     []UnpushedCommitsQuery{},
+		DeleteLocalBranchCalls:        []DeleteLocalBranchCall{},
+		DeleteRemoteBranchCalls:       []DeleteRemoteBranchCall{},
+		RemoteBranchExistsOnQueries:   []RemoteBranchExistsOnQuery{},
 	}
 }
 
@@ -473,4 +538,90 @@ func (t *TestEffects) GetWorktreeStatus(path string) git.WorktreeStatus {
 	}
 	// Default: clean worktree
 	return git.WorktreeStatus{}
+}
+
+func (t *TestEffects) IsBranchMergedIntoMain(repoRoot, branch string) (bool, error) {
+	t.IsBranchMergedIntoMainCalls++
+	t.IsBranchMergedIntoMainQueries = append(t.IsBranchMergedIntoMainQueries, BranchQuery{
+		RepoRoot: repoRoot,
+		Branch:   branch,
+	})
+	if t.IsBranchMergedIntoMainErr != nil {
+		return false, t.IsBranchMergedIntoMainErr
+	}
+	return t.BranchMergedIntoMain[branch], nil
+}
+
+func (t *TestEffects) GetBranchUpstream(repoRoot, branch string) git.BranchUpstream {
+	t.GetBranchUpstreamCalls++
+	t.GetBranchUpstreamQueries = append(t.GetBranchUpstreamQueries, BranchQuery{
+		RepoRoot: repoRoot,
+		Branch:   branch,
+	})
+	if upstream, ok := t.BranchUpstreams[branch]; ok {
+		return upstream
+	}
+	// Default: origin fallback
+	return git.BranchUpstream{
+		Remote:       "origin",
+		RemoteBranch: branch,
+		Configured:   false,
+	}
+}
+
+func (t *TestEffects) HasUnpushedCommits(repoRoot, branch, remote, remoteBranch string) (bool, error) {
+	t.HasUnpushedCommitsCalls++
+	t.HasUnpushedCommitsQueries = append(t.HasUnpushedCommitsQueries, UnpushedCommitsQuery{
+		RepoRoot:     repoRoot,
+		Branch:       branch,
+		Remote:       remote,
+		RemoteBranch: remoteBranch,
+	})
+	if t.HasUnpushedCommitsErr != nil {
+		return false, t.HasUnpushedCommitsErr
+	}
+	return t.BranchHasUnpushedCommits[branch], nil
+}
+
+func (t *TestEffects) DeleteLocalBranch(repoRoot, branch string, force bool) error {
+	t.DeleteLocalBranchCallCount++
+	t.DeleteLocalBranchCalls = append(t.DeleteLocalBranchCalls, DeleteLocalBranchCall{
+		RepoRoot: repoRoot,
+		Branch:   branch,
+		Force:    force,
+	})
+	if t.DeleteLocalBranchErr != nil {
+		return t.DeleteLocalBranchErr
+	}
+	// Remove from local branches
+	delete(t.LocalBranches, branch)
+	return nil
+}
+
+func (t *TestEffects) DeleteRemoteBranch(repoRoot, remote, branch string) error {
+	t.DeleteRemoteBranchCallCount++
+	t.DeleteRemoteBranchCalls = append(t.DeleteRemoteBranchCalls, DeleteRemoteBranchCall{
+		RepoRoot: repoRoot,
+		Remote:   remote,
+		Branch:   branch,
+	})
+	if t.DeleteRemoteBranchErr != nil {
+		return t.DeleteRemoteBranchErr
+	}
+	// Remove from remote branches
+	delete(t.RemoteBranchExistsOnMap, remote+"/"+branch)
+	return nil
+}
+
+func (t *TestEffects) RemoteBranchExistsOn(repoRoot, remote, branch string) (bool, error) {
+	t.RemoteBranchExistsOnCalls++
+	t.RemoteBranchExistsOnQueries = append(t.RemoteBranchExistsOnQueries, RemoteBranchExistsOnQuery{
+		RepoRoot: repoRoot,
+		Remote:   remote,
+		Branch:   branch,
+	})
+	if t.RemoteBranchExistsOnErr != nil {
+		return false, t.RemoteBranchExistsOnErr
+	}
+	return t.RemoteBranchExistsOnMap[remote+"/"+branch], nil
 }
