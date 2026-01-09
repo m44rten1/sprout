@@ -8,6 +8,14 @@ Stop `cd ../../other-repo`ing like a caveman.
 
 ## 🚀 Installation
 
+### Quick Install (Linux / macOS)
+
+```bash
+curl -sSL https://raw.githubusercontent.com/m44rten1/sprout/main/install.sh | bash
+```
+
+This downloads the latest binary and installs it to `~/.local/bin`.
+
 ### Homebrew (macOS / Linux)
 
 ```bash
@@ -19,20 +27,6 @@ brew install sprout
 
 ```bash
 go install github.com/m44rten1/sprout@latest
-```
-
-### Download Binary (Linux / macOS)
-
-Download the latest release from [GitHub Releases](https://github.com/m44rten1/sprout/releases):
-
-```bash
-# Linux (x86_64)
-curl -L https://github.com/m44rten1/sprout/releases/latest/download/sprout_Linux_x86_64.tar.gz | tar xz
-sudo mv sprout /usr/local/bin/
-
-# Linux (ARM64)
-curl -L https://github.com/m44rten1/sprout/releases/latest/download/sprout_Linux_arm64.tar.gz | tar xz
-sudo mv sprout /usr/local/bin/
 ```
 
 ## 🛠 Usage
