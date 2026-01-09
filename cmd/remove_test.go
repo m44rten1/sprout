@@ -341,7 +341,7 @@ func TestRemoveCommand_EndToEnd(t *testing.T) {
 			plan := core.PlanRemoveCommand(ctx)
 
 			// Execute
-			err = effects.ExecutePlan(plan, fx)
+			_ = effects.ExecutePlan(plan, fx)
 			// Note: We don't assert on err here because error plans return ExitError,
 			// which is expected behavior. Tests verify outcomes via recorded effects.
 

@@ -108,7 +108,7 @@ type UntrustedError struct {
 }
 
 func (e *UntrustedError) Error() string {
-	return fmt.Sprintf("hooks are not trusted for this repository")
+	return "hooks are not trusted for this repository"
 }
 
 // PrintUntrustedMessage prints a helpful message about trusting a repo

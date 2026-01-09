@@ -244,8 +244,8 @@ func GetAheadBehind(path string) (ahead, behind int, err error) {
 	// Parse output: "ahead\tbehind"
 	parts := strings.Fields(out)
 	if len(parts) == 2 {
-		fmt.Sscanf(parts[0], "%d", &ahead)
-		fmt.Sscanf(parts[1], "%d", &behind)
+		_, _ = fmt.Sscanf(parts[0], "%d", &ahead)
+		_, _ = fmt.Sscanf(parts[1], "%d", &behind)
 	}
 
 	return ahead, behind, nil
@@ -301,7 +301,7 @@ func IsUnmerged(path, baseBranch string) (bool, error) {
 	}
 
 	count := 0
-	fmt.Sscanf(out, "%d", &count)
+	_, _ = fmt.Sscanf(out, "%d", &count)
 	return count > 0, nil
 }
 
@@ -350,7 +350,7 @@ func IsBranchMergedIntoMain(repoRoot, branch string) (bool, error) {
 	}
 
 	count := 0
-	fmt.Sscanf(out, "%d", &count)
+	_, _ = fmt.Sscanf(out, "%d", &count)
 	return count == 0, nil
 }
 
@@ -434,6 +434,6 @@ func HasUnpushedCommits(repoRoot, branch, remote, remoteBranch string) (bool, er
 	}
 
 	count := 0
-	fmt.Sscanf(out, "%d", &count)
+	_, _ = fmt.Sscanf(out, "%d", &count)
 	return count > 0, nil
 }

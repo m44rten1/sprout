@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/m44rten1/sprout/internal/git"
@@ -8,19 +9,19 @@ import (
 
 // Message constants for remove command
 const (
-	msgRemovedWorktree          = "Removed worktree at %s"
-	msgWouldRemoveWorktree      = "Would remove worktree at %s"
-	msgDeletedLocalBranch       = "Deleted local branch %s"
-	msgWouldDeleteLocalBranch   = "Would delete local branch %s"
-	msgDeletedLocalBranchForce  = "Deleted local branch %s (was not merged into main)"
-	msgDeletedRemoteBranch      = "Deleted remote branch %s/%s"
-	msgWouldDeleteRemoteBranch  = "Would delete remote branch %s/%s"
-	msgBranchNotFound           = "Branch %s not found, skipping branch deletion"
-	msgBranchNotMerged          = "Branch %s is not merged into main.\nUse -D to force delete, or merge it first."
-	msgRemoteBranchNotFound     = "Remote branch %s/%s not found, skipping"
-	msgNoUpstreamAssumeOrigin   = "No upstream configured for %s, assuming %s/%s"
-	msgUnpushedCommitsWarning   = "Warning: branch %s has unpushed commits"
-	errRefuseNonSprout          = "Refusing to remove non-sprout worktree: %s"
+	msgRemovedWorktree            = "Removed worktree at %s"
+	msgWouldRemoveWorktree        = "Would remove worktree at %s"
+	msgDeletedLocalBranch         = "Deleted local branch %s"
+	msgWouldDeleteLocalBranch     = "Would delete local branch %s"
+	msgDeletedLocalBranchForce    = "Deleted local branch %s (was not merged into main)"
+	msgDeletedRemoteBranch        = "Deleted remote branch %s/%s"
+	msgWouldDeleteRemoteBranch    = "Would delete remote branch %s/%s"
+	msgBranchNotFound             = "Branch %s not found, skipping branch deletion"
+	msgBranchNotMerged            = "Branch %s is not merged into main.\nUse -D to force delete, or merge it first."
+	msgRemoteBranchNotFound       = "Remote branch %s/%s not found, skipping"
+	msgNoUpstreamAssumeOrigin     = "No upstream configured for %s, assuming %s/%s"
+	msgUnpushedCommitsWarning     = "Warning: branch %s has unpushed commits"
+	errRefuseNonSprout            = "Refusing to remove non-sprout worktree: %s"
 	errDeleteRemoteRequiresBranch = "--delete-remote requires -d or -D flag"
 )
 
@@ -91,7 +92,7 @@ func PlanRemoveCommand(ctx RemoveContext) Plan {
 
 	// Validate flag combinations
 	if ctx.DeleteRemote && !ctx.DeleteBranch && !ctx.ForceDelete {
-		return errorPlan(fmt.Errorf(errDeleteRemoteRequiresBranch))
+		return errorPlan(errors.New(errDeleteRemoteRequiresBranch))
 	}
 
 	// -D implies -d
