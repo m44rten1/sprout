@@ -8,7 +8,7 @@ Stop `cd ../../other-repo`ing like a caveman.
 
 ## 🚀 Installation
 
-### Homebrew
+### Homebrew (macOS / Linux)
 
 ```bash
 brew tap m44rten1/sprout
@@ -19,6 +19,20 @@ brew install sprout
 
 ```bash
 go install github.com/m44rten1/sprout@latest
+```
+
+### Download Binary (Linux / macOS)
+
+Download the latest release from [GitHub Releases](https://github.com/m44rten1/sprout/releases):
+
+```bash
+# Linux (x86_64)
+curl -L https://github.com/m44rten1/sprout/releases/latest/download/sprout_Linux_x86_64.tar.gz | tar xz
+sudo mv sprout /usr/local/bin/
+
+# Linux (ARM64)
+curl -L https://github.com/m44rten1/sprout/releases/latest/download/sprout_Linux_arm64.tar.gz | tar xz
+sudo mv sprout /usr/local/bin/
 ```
 
 ## 🛠 Usage
@@ -255,7 +269,7 @@ export SPROUT_EDITOR="cursor"
 # Use Zed
 export SPROUT_EDITOR="zed"
 
-# Use your system's default (macOS: TextEdit, Linux: xdg-open)
+# Use your system's default (macOS: open, Linux: xdg-open)
 unset SPROUT_EDITOR EDITOR
 ```
 
