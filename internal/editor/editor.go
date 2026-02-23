@@ -42,10 +42,21 @@ func openWithCommand(editor, path string) error {
 
 	// Check if command exists
 	if _, err := exec.LookPath(cmd); err != nil {
-		return fmt.Errorf("editor command not found: %s", cmd)
+		return fmt.Errorf("editor command not found: %s. hint: set SPROUT_EDITOR or EDITOR to a valid command (example: export SPROUT_EDITOR=\"cursor\")", cmd)
 	}
 
-	return exec.Command(cmd, args...).Run()
+	output, err := exec.Command(cmd, args...).CombinedOutput()
+	if err == nil {
+		return nil
+	}
+
+	fullCommand := strings.Join(append([]string{cmd}, args...), " ")
+	trimmedOutput := strings.TrimSpace(string(output))
+	if trimmedOutput == "" {
+		return fmt.Errorf("editor command failed: %s. hint: check SPROUT_EDITOR/EDITOR, try `export SPROUT_EDITOR=\"cursor\"`, or use --no-open: %w", fullCommand, err)
+	}
+
+	return fmt.Errorf("editor command failed: %s. output: %s. hint: check SPROUT_EDITOR/EDITOR, try `export SPROUT_EDITOR=\"cursor\"`, or use --no-open: %w", fullCommand, trimmedOutput, err)
 }
 
 // openWithPlatformDefaults tries platform-specific editor defaults.

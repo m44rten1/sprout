@@ -30,6 +30,16 @@ func TestOpenWithCommand(t *testing.T) {
 		err := openWithCommand("nonexistent-editor-12345", "/test/path")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
+		assert.Contains(t, err.Error(), "SPROUT_EDITOR")
+	})
+
+	t.Run("failing command includes actionable hint", func(t *testing.T) {
+		err := openWithCommand("false", "/test/path")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "editor command failed")
+		assert.Contains(t, err.Error(), "false /test/path")
+		assert.Contains(t, err.Error(), "SPROUT_EDITOR")
+		assert.Contains(t, err.Error(), "--no-open")
 	})
 }
 
