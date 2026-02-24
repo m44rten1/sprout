@@ -60,7 +60,7 @@ func TestBuildAddContext(t *testing.T) {
 				WorktreeExists:     false,
 				LocalBranchExists:  false,
 				RemoteBranchExists: false,
-				HasOriginMain:      true,
+				FromRef:            "origin/main",
 				Config:             &config.Config{Hooks: config.HooksConfig{}},
 				IsTrusted:          false,
 				NoHooks:            false,
@@ -89,7 +89,7 @@ func TestBuildAddContext(t *testing.T) {
 				WorktreeExists:     false,
 				LocalBranchExists:  false,
 				RemoteBranchExists: true,
-				HasOriginMain:      true,
+				FromRef:            "origin/main",
 				Config:             &config.Config{Hooks: config.HooksConfig{}},
 				IsTrusted:          false,
 				NoHooks:            false,
@@ -122,7 +122,7 @@ func TestBuildAddContext(t *testing.T) {
 				WorktreeExists:     false,
 				LocalBranchExists:  false,
 				RemoteBranchExists: true,
-				HasOriginMain:      true,
+				FromRef:            "origin/main",
 				Config:             &config.Config{Hooks: config.HooksConfig{}},
 				IsTrusted:          false,
 				NoHooks:            false,
@@ -155,7 +155,7 @@ func TestBuildAddContext(t *testing.T) {
 				WorktreeExists:     true,
 				LocalBranchExists:  true,
 				RemoteBranchExists: false,
-				HasOriginMain:      true,
+				FromRef:            "origin/main",
 				Config:             &config.Config{Hooks: config.HooksConfig{}},
 				IsTrusted:          false,
 				NoHooks:            false,
@@ -188,7 +188,7 @@ func TestBuildAddContext(t *testing.T) {
 				WorktreeExists:     false,
 				LocalBranchExists:  false,
 				RemoteBranchExists: false,
-				HasOriginMain:      true,
+				FromRef:            "origin/main",
 				Config: &config.Config{
 					Hooks: config.HooksConfig{
 						OnCreate: []string{"npm install"},
@@ -230,7 +230,7 @@ func TestBuildAddContext(t *testing.T) {
 				WorktreeExists:     false,
 				LocalBranchExists:  false,
 				RemoteBranchExists: false,
-				HasOriginMain:      true,
+				FromRef:            "origin/main",
 				Config: &config.Config{
 					Hooks: config.HooksConfig{
 						OnCreate: []string{"npm install"},

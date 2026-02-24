@@ -13,7 +13,7 @@ func TestWorktreeAddArgs(t *testing.T) {
 		branch             string
 		localExists        bool
 		remoteBranchExists bool
-		hasOriginMain      bool
+		fromRef            string
 		want               []string
 	}{
 		{
@@ -22,7 +22,7 @@ func TestWorktreeAddArgs(t *testing.T) {
 			branch:             "feature-123",
 			localExists:        true,
 			remoteBranchExists: false,
-			hasOriginMain:      false,
+			fromRef:            "origin/main",
 			want:               []string{"worktree", "add", "/path/to/worktree", "feature-123"},
 		},
 		{
@@ -31,26 +31,35 @@ func TestWorktreeAddArgs(t *testing.T) {
 			branch:             "feature-456",
 			localExists:        false,
 			remoteBranchExists: true,
-			hasOriginMain:      false,
+			fromRef:            "origin/main",
 			want:               []string{"worktree", "add", "/path/to/worktree", "-b", "feature-456", "origin/feature-456"},
 		},
 		{
-			name:               "new branch with origin/main - branch from origin/main with --no-track",
+			name:               "new branch from origin/main",
 			path:               "/path/to/worktree",
 			branch:             "new-feature",
 			localExists:        false,
 			remoteBranchExists: false,
-			hasOriginMain:      true,
+			fromRef:            "origin/main",
 			want:               []string{"worktree", "add", "/path/to/worktree", "-b", "new-feature", "--no-track", "origin/main"},
 		},
 		{
-			name:               "new branch without origin/main - branch from HEAD with --no-track",
+			name:               "new branch from HEAD",
 			path:               "/path/to/worktree",
 			branch:             "experimental",
 			localExists:        false,
 			remoteBranchExists: false,
-			hasOriginMain:      false,
+			fromRef:            "HEAD",
 			want:               []string{"worktree", "add", "/path/to/worktree", "-b", "experimental", "--no-track", "HEAD"},
+		},
+		{
+			name:               "new branch from custom ref",
+			path:               "/path/to/worktree",
+			branch:             "sub-feature",
+			localExists:        false,
+			remoteBranchExists: false,
+			fromRef:            "origin/develop",
+			want:               []string{"worktree", "add", "/path/to/worktree", "-b", "sub-feature", "--no-track", "origin/develop"},
 		},
 		{
 			name:               "local exists with remote also existing - prefer local",
@@ -58,7 +67,7 @@ func TestWorktreeAddArgs(t *testing.T) {
 			branch:             "main",
 			localExists:        true,
 			remoteBranchExists: true,
-			hasOriginMain:      true,
+			fromRef:            "origin/main",
 			want:               []string{"worktree", "add", "/path/to/worktree", "main"},
 		},
 		{
@@ -67,7 +76,7 @@ func TestWorktreeAddArgs(t *testing.T) {
 			branch:             "develop",
 			localExists:        false,
 			remoteBranchExists: true,
-			hasOriginMain:      true,
+			fromRef:            "origin/main",
 			want:               []string{"worktree", "add", "/path/to/worktree", "-b", "develop", "origin/develop"},
 		},
 	}
@@ -76,7 +85,7 @@ func TestWorktreeAddArgs(t *testing.T) {
 		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := WorktreeAddArgs(tt.path, tt.branch, tt.localExists, tt.remoteBranchExists, tt.hasOriginMain)
+			got := WorktreeAddArgs(tt.path, tt.branch, tt.localExists, tt.remoteBranchExists, tt.fromRef)
 			assert.Equal(t, tt.want, got, "git command mismatch")
 		})
 	}
@@ -94,17 +103,17 @@ func indexOf(xs []string, v string) int {
 
 func TestWorktreeAddArgs_ArgumentOrder(t *testing.T) {
 	t.Run("existing local branch has no --no-track", func(t *testing.T) {
-		result := WorktreeAddArgs("/path", "existing", true, false, false)
+		result := WorktreeAddArgs("/path", "existing", true, false, "origin/main")
 		assert.NotContains(t, result, "--no-track", "existing local branches should not have --no-track")
 	})
 
 	t.Run("remote branch has no --no-track (wants tracking)", func(t *testing.T) {
-		result := WorktreeAddArgs("/path", "remote-branch", false, true, false)
+		result := WorktreeAddArgs("/path", "remote-branch", false, true, "origin/main")
 		assert.NotContains(t, result, "--no-track", "remote branches should enable upstream tracking")
 	})
 
 	t.Run("new branch places --no-track AFTER -b (Git semantics)", func(t *testing.T) {
-		result := WorktreeAddArgs("/path", "new", false, false, true)
+		result := WorktreeAddArgs("/path", "new", false, false, "origin/main")
 
 		idxB := indexOf(result, "-b")
 		idxNoTrack := indexOf(result, "--no-track")
@@ -115,7 +124,7 @@ func TestWorktreeAddArgs_ArgumentOrder(t *testing.T) {
 	})
 
 	t.Run("new branch from HEAD places --no-track AFTER -b", func(t *testing.T) {
-		result := WorktreeAddArgs("/path", "new", false, false, false)
+		result := WorktreeAddArgs("/path", "new", false, false, "HEAD")
 
 		idxB := indexOf(result, "-b")
 		idxNoTrack := indexOf(result, "--no-track")

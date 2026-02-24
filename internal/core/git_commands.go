@@ -1,10 +1,11 @@
 package core
 
 // WorktreeAddArgs constructs git arguments for creating a worktree.
-// It follows this priority: local branch > remote branch > new from origin/main > new from HEAD.
+// It follows this priority: local branch > remote branch > new from fromRef.
 // When creating from a remote branch, upstream tracking is enabled by default.
 // For truly new branches, --no-track is used to avoid configuring an upstream.
-func WorktreeAddArgs(path, branch string, localExists bool, remoteBranchExists bool, hasOriginMain bool) []string {
+// The caller must resolve fromRef before calling (e.g. "origin/main", "HEAD", or a custom ref).
+func WorktreeAddArgs(path, branch string, localExists bool, remoteBranchExists bool, fromRef string) []string {
 	args := []string{"worktree", "add", path}
 
 	// Case 1: Local branch exists - simple checkout
@@ -18,13 +19,7 @@ func WorktreeAddArgs(path, branch string, localExists bool, remoteBranchExists b
 		return append(args, "-b", branch, "origin/"+branch)
 	}
 
-	// Case 3 & 4: Create truly new branch - avoid upstream config
+	// Case 3: Create truly new branch from the resolved base ref
 	// --no-track must follow -b (it's a branch creation option, not worktree option)
-	args = append(args, "-b", branch, "--no-track")
-
-	if hasOriginMain {
-		return append(args, "origin/main")
-	}
-
-	return append(args, "HEAD")
+	return append(args, "-b", branch, "--no-track", fromRef)
 }

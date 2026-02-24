@@ -135,11 +135,14 @@ func BuildAddContext(fx effects.Effects, args []string, noHooks, noOpen bool) (c
 		return core.AddContext{}, fmt.Errorf("failed to check remote branch: %w", err)
 	}
 
-	// Check if origin/main exists (used as base for new branches)
-	// Note: RemoteBranchExists automatically prepends "origin/" prefix
+	// Resolve base ref for new branches: prefer origin/main, fall back to HEAD
+	fromRef := "HEAD"
 	hasRemoteMain, err := fx.RemoteBranchExists(repoRoot, "main")
 	if err != nil {
 		return core.AddContext{}, fmt.Errorf("failed to check origin/main: %w", err)
+	}
+	if hasRemoteMain {
+		fromRef = "origin/main"
 	}
 
 	// Load config
@@ -165,7 +168,7 @@ func BuildAddContext(fx effects.Effects, args []string, noHooks, noOpen bool) (c
 		WorktreeExists:     worktreeExists,
 		LocalBranchExists:  localBranchExists,
 		RemoteBranchExists: remoteBranchExists,
-		HasOriginMain:      hasRemoteMain,
+		FromRef:            fromRef,
 		Config:             cfg,
 		IsTrusted:          isTrusted,
 		NoHooks:            noHooks,

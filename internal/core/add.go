@@ -24,7 +24,7 @@ type AddContext struct {
 	WorktreeExists     bool
 	LocalBranchExists  bool
 	RemoteBranchExists bool
-	HasOriginMain      bool
+	FromRef            string         // Resolved base ref for new branches (e.g. "origin/main", "HEAD", "develop")
 	Config             *config.Config // Must not be nil
 	IsTrusted          bool
 	NoHooks            bool
@@ -86,7 +86,7 @@ func PlanAddCommand(ctx AddContext) Plan {
 				},
 				RunGitCommand{
 					Dir:  ctx.RepoRoot,
-					Args: WorktreeAddArgs(ctx.WorktreePath, ctx.Branch, ctx.LocalBranchExists, ctx.RemoteBranchExists, ctx.HasOriginMain),
+					Args: WorktreeAddArgs(ctx.WorktreePath, ctx.Branch, ctx.LocalBranchExists, ctx.RemoteBranchExists, ctx.FromRef),
 				},
 				PrintMessage{Msg: msgWorktreeCreated},
 				conditionalEditor(ctx.NoOpen, ctx.WorktreePath),
@@ -110,7 +110,7 @@ func PlanAddCommand(ctx AddContext) Plan {
 		},
 		RunGitCommand{
 			Dir:  ctx.RepoRoot,
-			Args: WorktreeAddArgs(ctx.WorktreePath, ctx.Branch, ctx.LocalBranchExists, ctx.RemoteBranchExists, ctx.HasOriginMain),
+			Args: WorktreeAddArgs(ctx.WorktreePath, ctx.Branch, ctx.LocalBranchExists, ctx.RemoteBranchExists, ctx.FromRef),
 		},
 		PrintMessage{Msg: msgWorktreeCreated},
 	}
