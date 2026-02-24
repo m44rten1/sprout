@@ -73,9 +73,11 @@ type TestEffects struct {
 	UserHomeDirErr         error
 
 	// Interaction results
-	SelectedBranchIndex   int
-	SelectedWorktreeIndex int
-	SelectionError        error
+	SelectedBranchIndex     int
+	SelectedFromBranchIndex int
+	SelectedWorktreeIndex   int
+	SelectionError          error
+	SelectFromBranchError   error
 
 	// Call counters (structured tracking)
 	GetRepoRootCalls            int
@@ -93,6 +95,7 @@ type TestEffects struct {
 	PrintCalls                  int
 	PrintErrCalls               int
 	SelectBranchCalls           int
+	SelectFromBranchCalls       int
 	SelectWorktreeCalls         int
 	RunHooksCalls               int
 	LocalBranchExistsCalls      int
@@ -403,6 +406,17 @@ func (t *TestEffects) SelectBranch(branches []git.Branch) (int, error) {
 		return -1, fmt.Errorf("invalid selection index")
 	}
 	return t.SelectedBranchIndex, nil
+}
+
+func (t *TestEffects) SelectFromBranch(branches []git.Branch) (int, error) {
+	t.SelectFromBranchCalls++
+	if t.SelectFromBranchError != nil {
+		return -1, t.SelectFromBranchError
+	}
+	if t.SelectedFromBranchIndex < 0 || t.SelectedFromBranchIndex >= len(branches) {
+		return -1, fmt.Errorf("invalid selection index")
+	}
+	return t.SelectedFromBranchIndex, nil
 }
 
 func (t *TestEffects) SelectWorktree(worktrees []git.Worktree) (int, error) {

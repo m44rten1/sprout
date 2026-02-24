@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ktr0731/go-fuzzyfinder"
 	"github.com/m44rten1/sprout/internal/config"
 	"github.com/m44rten1/sprout/internal/editor"
 	"github.com/m44rten1/sprout/internal/git"
@@ -89,6 +90,11 @@ func (r *RealEffects) SelectBranch(branches []git.Branch) (int, error) {
 	return tui.SelectOne(branches, branchLabel, nil)
 }
 
+func (r *RealEffects) SelectFromBranch(branches []git.Branch) (int, error) {
+	sorted := sortBranchesMainFirst(branches)
+	return tui.SelectOne(sorted, branchLabel, nil, fuzzyfinder.WithHeader("Select base branch:"))
+}
+
 func (r *RealEffects) SelectWorktree(worktrees []git.Worktree) (int, error) {
 	// Pre-compute statuses for all worktrees in parallel
 	statuses := make([]git.WorktreeStatus, len(worktrees))
@@ -119,6 +125,20 @@ func (r *RealEffects) SelectWorktree(worktrees []git.Worktree) (int, error) {
 // branchLabel returns the display name for a branch.
 func branchLabel(b git.Branch) string {
 	return b.DisplayName
+}
+
+// sortBranchesMainFirst returns a copy with "main" at the front.
+func sortBranchesMainFirst(branches []git.Branch) []git.Branch {
+	sorted := make([]git.Branch, 0, len(branches))
+	var rest []git.Branch
+	for _, b := range branches {
+		if b.Name == "main" {
+			sorted = append(sorted, b)
+		} else {
+			rest = append(rest, b)
+		}
+	}
+	return append(sorted, rest...)
 }
 
 // worktreeLabel returns a display label for a worktree.

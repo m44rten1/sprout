@@ -48,6 +48,7 @@ type Effects interface {
 	// Items must be provided as []T where display converts T to string.
 	// This maintains type safety while avoiding interface{} casting in callers.
 	SelectBranch(branches []git.Branch) (int, error)
+	SelectFromBranch(branches []git.Branch) (int, error)
 	SelectWorktree(worktrees []git.Worktree) (int, error)
 
 	// Hooks
