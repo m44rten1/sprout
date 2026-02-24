@@ -32,6 +32,12 @@ func GetMainWorktreePath() (string, error) {
 	return worktrees[0].Path, nil
 }
 
+// GetCurrentBranch returns the name of the currently checked-out branch.
+// Returns "HEAD" if in detached HEAD state.
+func GetCurrentBranch(repoRoot string) (string, error) {
+	return RunGitCommand(repoRoot, "rev-parse", "--abbrev-ref", "HEAD")
+}
+
 // RunGitCommand runs a git command in the given directory.
 func RunGitCommand(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
