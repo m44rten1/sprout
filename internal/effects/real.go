@@ -35,6 +35,10 @@ func (r *RealEffects) GetMainWorktreePath() (string, error) {
 	return git.GetMainWorktreePath()
 }
 
+func (r *RealEffects) GetCurrentBranch(repoRoot string) (string, error) {
+	return git.GetCurrentBranch(repoRoot)
+}
+
 func (r *RealEffects) ListWorktrees(repoRoot string) ([]git.Worktree, error) {
 	return git.ListWorktrees(repoRoot)
 }

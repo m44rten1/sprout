@@ -13,6 +13,7 @@ type Effects interface {
 	// Git operations
 	GetRepoRoot() (string, error)
 	GetMainWorktreePath() (string, error)
+	GetCurrentBranch(repoRoot string) (string, error)
 	ListWorktrees(repoRoot string) ([]git.Worktree, error)
 	ListBranches(repoRoot string) ([]git.Branch, error)
 	RunGitCommand(dir string, args ...string) (string, error)

@@ -16,6 +16,7 @@ type TestEffects struct {
 	// Predefined return values
 	RepoRoot         string
 	MainWorktreePath string
+	CurrentBranch    string
 	Worktrees        []git.Worktree
 	Branches         []git.Branch
 	Config           *config.Config
@@ -57,6 +58,7 @@ type TestEffects struct {
 	// Error injection - set these to simulate failures
 	GetRepoRootErr         error
 	GetMainWorktreePathErr error
+	GetCurrentBranchErr    error
 	ListWorktreesErr       error
 	ListBranchesErr        error
 	MkdirAllErr            error
@@ -82,6 +84,7 @@ type TestEffects struct {
 	// Call counters (structured tracking)
 	GetRepoRootCalls            int
 	GetMainWorktreePathCalls    int
+	GetCurrentBranchCalls       int
 	ListWorktreesCalls          int
 	ListBranchesCalls           int
 	RunGitCommandCalls          int
@@ -281,6 +284,17 @@ func (t *TestEffects) GetMainWorktreePath() (string, error) {
 		return "", fmt.Errorf("no worktrees found")
 	}
 	return t.MainWorktreePath, nil
+}
+
+func (t *TestEffects) GetCurrentBranch(repoRoot string) (string, error) {
+	t.GetCurrentBranchCalls++
+	if t.GetCurrentBranchErr != nil {
+		return "", t.GetCurrentBranchErr
+	}
+	if t.CurrentBranch == "" {
+		return "", fmt.Errorf("not on any branch (detached HEAD)")
+	}
+	return t.CurrentBranch, nil
 }
 
 func (t *TestEffects) ListWorktrees(repoRoot string) ([]git.Worktree, error) {
