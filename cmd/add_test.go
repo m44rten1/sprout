@@ -38,6 +38,7 @@ func TestBuildAddContext(t *testing.T) {
 		noHooks       bool
 		noOpen        bool
 		fromValue     *string // nil = flag not set; pointer to value = flag set
+		fromCurrent   bool
 		setupFx       func(*effects.TestEffects)
 		wantCtx       *core.AddContext // nil if error expected
 		wantErr       bool
@@ -454,6 +455,59 @@ func TestBuildAddContext(t *testing.T) {
 			wantCtx: nil,
 			wantErr: true,
 		},
+		{
+			name:        "--from-current resolves to current branch",
+			args:        []string{"feature"},
+			noHooks:     false,
+			noOpen:      false,
+			fromCurrent: true,
+			setupFx: func(fx *effects.TestEffects) {
+				fx.CurrentBranch = "develop"
+				fx.LocalBranches["feature"] = false
+				fx.RemoteBranches["feature"] = false
+				fx.WorktreePaths["feature"] = "/test/repo-sprout/feature"
+				fx.Files["/test/repo-sprout/feature"] = false
+			},
+			wantCtx: &core.AddContext{
+				Branch:             "feature",
+				RepoRoot:           "/test/repo",
+				MainWorktreePath:   "/test/repo",
+				WorktreePath:       "/test/repo-sprout/feature",
+				WorktreeExists:     false,
+				LocalBranchExists:  false,
+				RemoteBranchExists: false,
+				FromRef:            "develop",
+				Config:             &config.Config{Hooks: config.HooksConfig{}},
+				IsTrusted:          false,
+				NoHooks:            false,
+				NoOpen:             false,
+			},
+			wantErr: false,
+			assertEffects: func(t *testing.T, fx *effects.TestEffects) {
+				assert.Equal(t, 1, fx.GetCurrentBranchCalls)
+			},
+		},
+		{
+			name:        "--from-current without branch arg errors",
+			args:        []string{},
+			noHooks:     false,
+			noOpen:      false,
+			fromCurrent: true,
+			setupFx:     func(fx *effects.TestEffects) {},
+			wantCtx:     nil,
+			wantErr:     true,
+		},
+		{
+			name:        "--from and --from-current are mutually exclusive",
+			args:        []string{"feature"},
+			noHooks:     false,
+			noOpen:      false,
+			fromValue:   strPtr("develop"),
+			fromCurrent: true,
+			setupFx:     func(fx *effects.TestEffects) {},
+			wantCtx:     nil,
+			wantErr:     true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -471,7 +525,7 @@ func TestBuildAddContext(t *testing.T) {
 				fromChanged = true
 			}
 
-			ctx, err := BuildAddContext(fx, tt.args, tt.noHooks, tt.noOpen, fromValue, fromChanged)
+			ctx, err := BuildAddContext(fx, tt.args, tt.noHooks, tt.noOpen, fromValue, fromChanged, tt.fromCurrent)
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -718,7 +772,7 @@ func TestAddCommand_EndToEnd(t *testing.T) {
 			tt.setupFx(fx)
 
 			// Build context from effects (simulating handler)
-			ctx, err := BuildAddContext(fx, tt.args, tt.noHooks, tt.noOpen, "", false)
+			ctx, err := BuildAddContext(fx, tt.args, tt.noHooks, tt.noOpen, "", false, false)
 			if tt.wantErr && err != nil {
 				// Early error in context building
 				require.Error(t, err)

@@ -12,9 +12,10 @@ import (
 )
 
 var (
-	addNoHooksFlag bool
-	addNoOpenFlag  bool
-	addFromFlag    string
+	addNoHooksFlag      bool
+	addNoOpenFlag       bool
+	addFromFlag         string
+	addFromCurrentFlag  bool
 )
 
 const fromPickerValue = "?"
@@ -61,7 +62,7 @@ var addCmd = &cobra.Command{
 		fx := effects.NewRealEffects()
 
 		fromChanged := cmd.Flags().Changed("from")
-		ctx, err := BuildAddContext(fx, args, addNoHooksFlag, addNoOpenFlag, addFromFlag, fromChanged)
+		ctx, err := BuildAddContext(fx, args, addNoHooksFlag, addNoOpenFlag, addFromFlag, fromChanged, addFromCurrentFlag)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
@@ -76,12 +77,19 @@ var addCmd = &cobra.Command{
 // It handles interactive branch selection if no branch is provided.
 // fromValue and fromChanged represent the --from flag state:
 //   - fromChanged=false: default behavior (origin/main or HEAD)
-//   - fromChanged=true, fromValue=sentinel: interactive from-branch picker
+//   - fromChanged=true, fromValue="?": interactive from-branch picker
 //   - fromChanged=true, fromValue=<branch>: use that branch as base
-func BuildAddContext(fx effects.Effects, args []string, noHooks, noOpen bool, fromValue string, fromChanged bool) (core.AddContext, error) {
-	// Validate: --from requires an explicit branch name
-	if fromChanged && len(args) == 0 {
-		return core.AddContext{}, fmt.Errorf("--from requires a branch name argument\n\nUsage: sprout add <branch> --from [base-branch]")
+//
+// fromCurrent=true uses the currently checked-out branch as the base ref.
+func BuildAddContext(fx effects.Effects, args []string, noHooks, noOpen bool, fromValue string, fromChanged bool, fromCurrent bool) (core.AddContext, error) {
+	// Validate: --from and --from-current are mutually exclusive
+	if fromChanged && fromCurrent {
+		return core.AddContext{}, fmt.Errorf("--from and --from-current cannot be used together")
+	}
+
+	// Validate: --from / --from-current require an explicit branch name
+	if (fromChanged || fromCurrent) && len(args) == 0 {
+		return core.AddContext{}, fmt.Errorf("--from/--from-current requires a branch name argument\n\nUsage: sprout add <branch> --from [base-branch]")
 	}
 
 	// Get repo root
@@ -149,7 +157,7 @@ func BuildAddContext(fx effects.Effects, args []string, noHooks, noOpen bool, fr
 	}
 
 	// Resolve base ref for new branches
-	fromRef, err := resolveFromRef(fx, repoRoot, fromValue, fromChanged)
+	fromRef, err := resolveFromRef(fx, repoRoot, fromValue, fromChanged, fromCurrent)
 	if err != nil {
 		return core.AddContext{}, err
 	}
@@ -186,7 +194,16 @@ func BuildAddContext(fx effects.Effects, args []string, noHooks, noOpen bool, fr
 }
 
 // resolveFromRef determines the base ref for new branch creation.
-func resolveFromRef(fx effects.Effects, repoRoot string, fromValue string, fromChanged bool) (string, error) {
+func resolveFromRef(fx effects.Effects, repoRoot string, fromValue string, fromChanged bool, fromCurrent bool) (string, error) {
+	// --from-current: use the currently checked-out branch
+	if fromCurrent {
+		branch, err := fx.GetCurrentBranch(repoRoot)
+		if err != nil {
+			return "", fmt.Errorf("failed to get current branch: %w", err)
+		}
+		return branch, nil
+	}
+
 	// Explicit --from <branch> (not the picker trigger)
 	if fromChanged && fromValue != fromPickerValue {
 		return fromValue, nil
@@ -226,4 +243,5 @@ func init() {
 	addCmd.Flags().BoolVar(&addNoHooksFlag, "no-hooks", false, "Skip running on_create hooks even if .sprout.yml exists")
 	addCmd.Flags().BoolVar(&addNoOpenFlag, "no-open", false, "Skip opening the worktree in an editor")
 	addCmd.Flags().StringVar(&addFromFlag, "from", "", `Base branch to create the new branch from (use "?" for interactive picker)`)
+	addCmd.Flags().BoolVar(&addFromCurrentFlag, "from-current", false, "Use the currently checked-out branch as the base")
 }
