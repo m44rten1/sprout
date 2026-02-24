@@ -83,10 +83,18 @@ sprout add feat/sub-feature --from feat/parent-feature
 
 Create a new worktree branching from `feat/parent-feature` instead of `main`.
 
+**Branch from the current branch:**
+
+```bash
+sprout add feat/sub-feature --from-current
+```
+
+Create a new worktree branching from whatever branch you currently have checked out.
+
 **Interactively pick the base branch:**
 
 ```bash
-sprout add feat/new-feature --from
+sprout add feat/new-feature --from ?
 ```
 
 Opens a fuzzy finder to select which branch to branch from (defaults to `main`).

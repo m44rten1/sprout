@@ -228,7 +228,8 @@ worktree-path  = <worktree-root>/<branch>/<repo-slug>
 
 - `--no-hooks`: Skip running `on_create` hooks even if `.sprout.yml` exists
 - `--no-open`: Skip opening the worktree in an editor
-- `--from [branch]`: Specify the base branch for the new worktree. If no value is given, opens an interactive picker. Defaults to `origin/main` when not used.
+- `--from <branch>`: Specify the base branch for the new worktree. Use `--from ?` to open an interactive picker. Defaults to `origin/main` when not used.
+- `--from-current`: Use the currently checked-out branch as the base for the new worktree.
 
 **Examples:**
 
@@ -240,14 +241,18 @@ sprout add feat/new-feature
 sprout add feat/sub-feature --from feat/parent-feature
 
 # Interactively select the base branch
-sprout add feat/new-feature --from
+sprout add feat/new-feature --from ?
+
+# Create from the currently checked-out branch
+sprout add feat/sub-feature --from-current
 ```
 
 **Notes:**
 
 - sprout creates all parent directories automatically
 - If the worktree already exists, sprout opens it instead of failing
-- `--from` requires an explicit branch name (cannot be used with interactive branch selection)
+- `--from` and `--from-current` require an explicit branch name argument (cannot be used with interactive branch selection)
+- `--from` and `--from-current` are mutually exclusive
 - See [HOOKS.md](HOOKS.md) for detailed hook documentation
 
 ⸻
