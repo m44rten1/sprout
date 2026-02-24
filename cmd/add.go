@@ -17,7 +17,7 @@ var (
 	addFromFlag    string
 )
 
-const fromFlagSentinel = ":"
+const fromPickerValue = "?"
 
 var addCmd = &cobra.Command{
 	Use:   "add [branch]",
@@ -187,12 +187,12 @@ func BuildAddContext(fx effects.Effects, args []string, noHooks, noOpen bool, fr
 
 // resolveFromRef determines the base ref for new branch creation.
 func resolveFromRef(fx effects.Effects, repoRoot string, fromValue string, fromChanged bool) (string, error) {
-	// Explicit --from <branch>
-	if fromChanged && fromValue != fromFlagSentinel {
+	// Explicit --from <branch> (not the picker trigger)
+	if fromChanged && fromValue != fromPickerValue {
 		return fromValue, nil
 	}
 
-	// Interactive --from (no value): show picker
+	// Interactive --from ? : show picker
 	if fromChanged {
 		branches, err := fx.ListBranches(repoRoot)
 		if err != nil {
@@ -225,6 +225,5 @@ func init() {
 	rootCmd.AddCommand(addCmd)
 	addCmd.Flags().BoolVar(&addNoHooksFlag, "no-hooks", false, "Skip running on_create hooks even if .sprout.yml exists")
 	addCmd.Flags().BoolVar(&addNoOpenFlag, "no-open", false, "Skip opening the worktree in an editor")
-	addCmd.Flags().StringVar(&addFromFlag, "from", "", "Base branch to create the new branch from (interactive picker if no value given)")
-	addCmd.Flags().Lookup("from").NoOptDefVal = fromFlagSentinel
+	addCmd.Flags().StringVar(&addFromFlag, "from", "", `Base branch to create the new branch from (use "?" for interactive picker)`)
 }

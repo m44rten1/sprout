@@ -369,7 +369,7 @@ func TestBuildAddContext(t *testing.T) {
 			args:      []string{},
 			noHooks:   false,
 			noOpen:    false,
-			fromValue: strPtr(fromFlagSentinel),
+			fromValue: strPtr(fromPickerValue),
 			setupFx:   func(fx *effects.TestEffects) {},
 			wantCtx:   nil,
 			wantErr:   true,
@@ -407,7 +407,7 @@ func TestBuildAddContext(t *testing.T) {
 			args:      []string{"feature"},
 			noHooks:   false,
 			noOpen:    false,
-			fromValue: strPtr(fromFlagSentinel),
+			fromValue: strPtr(fromPickerValue),
 			setupFx: func(fx *effects.TestEffects) {
 				fx.LocalBranches["feature"] = false
 				fx.RemoteBranches["feature"] = false
@@ -444,7 +444,7 @@ func TestBuildAddContext(t *testing.T) {
 			args:      []string{"feature"},
 			noHooks:   false,
 			noOpen:    false,
-			fromValue: strPtr(fromFlagSentinel),
+			fromValue: strPtr(fromPickerValue),
 			setupFx: func(fx *effects.TestEffects) {
 				fx.Branches = []git.Branch{
 					{RefName: "main", Name: "main", DisplayName: "main", IsLocal: true},
