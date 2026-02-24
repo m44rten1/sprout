@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func strPtr(s string) *string { return &s }
+
 // baseTestFx creates a TestEffects with common defaults for add command tests.
 // This reduces duplication and makes test case differences stand out.
 func baseTestFx() *effects.TestEffects {
@@ -35,6 +37,7 @@ func TestBuildAddContext(t *testing.T) {
 		args          []string
 		noHooks       bool
 		noOpen        bool
+		fromValue     *string // nil = flag not set; pointer to value = flag set
 		setupFx       func(*effects.TestEffects)
 		wantCtx       *core.AddContext // nil if error expected
 		wantErr       bool
@@ -361,6 +364,96 @@ func TestBuildAddContext(t *testing.T) {
 				assert.Equal(t, 1, fx.IsTrustedCalls)
 			},
 		},
+		{
+			name:      "--from without branch arg errors",
+			args:      []string{},
+			noHooks:   false,
+			noOpen:    false,
+			fromValue: strPtr(fromFlagSentinel),
+			setupFx:   func(fx *effects.TestEffects) {},
+			wantCtx:   nil,
+			wantErr:   true,
+		},
+		{
+			name:      "--from with explicit base branch",
+			args:      []string{"feature"},
+			noHooks:   false,
+			noOpen:    false,
+			fromValue: strPtr("develop"),
+			setupFx: func(fx *effects.TestEffects) {
+				fx.LocalBranches["feature"] = false
+				fx.RemoteBranches["feature"] = false
+				fx.WorktreePaths["feature"] = "/test/repo-sprout/feature"
+				fx.Files["/test/repo-sprout/feature"] = false
+			},
+			wantCtx: &core.AddContext{
+				Branch:             "feature",
+				RepoRoot:           "/test/repo",
+				MainWorktreePath:   "/test/repo",
+				WorktreePath:       "/test/repo-sprout/feature",
+				WorktreeExists:     false,
+				LocalBranchExists:  false,
+				RemoteBranchExists: false,
+				FromRef:            "develop",
+				Config:             &config.Config{Hooks: config.HooksConfig{}},
+				IsTrusted:          false,
+				NoHooks:            false,
+				NoOpen:             false,
+			},
+			wantErr: false,
+		},
+		{
+			name:      "--from interactive picker selects base branch",
+			args:      []string{"feature"},
+			noHooks:   false,
+			noOpen:    false,
+			fromValue: strPtr(fromFlagSentinel),
+			setupFx: func(fx *effects.TestEffects) {
+				fx.LocalBranches["feature"] = false
+				fx.RemoteBranches["feature"] = false
+				fx.WorktreePaths["feature"] = "/test/repo-sprout/feature"
+				fx.Files["/test/repo-sprout/feature"] = false
+				fx.Branches = []git.Branch{
+					{RefName: "main", Name: "main", DisplayName: "main", IsLocal: true},
+					{RefName: "develop", Name: "develop", DisplayName: "develop", IsLocal: true},
+				}
+				fx.SelectedFromBranchIndex = 1 // Select "develop"
+			},
+			wantCtx: &core.AddContext{
+				Branch:             "feature",
+				RepoRoot:           "/test/repo",
+				MainWorktreePath:   "/test/repo",
+				WorktreePath:       "/test/repo-sprout/feature",
+				WorktreeExists:     false,
+				LocalBranchExists:  false,
+				RemoteBranchExists: false,
+				FromRef:            "develop",
+				Config:             &config.Config{Hooks: config.HooksConfig{}},
+				IsTrusted:          false,
+				NoHooks:            false,
+				NoOpen:             false,
+			},
+			wantErr: false,
+			assertEffects: func(t *testing.T, fx *effects.TestEffects) {
+				assert.Equal(t, 1, fx.SelectFromBranchCalls)
+				assert.Equal(t, 1, fx.ListBranchesCalls)
+			},
+		},
+		{
+			name:      "--from interactive picker cancelled",
+			args:      []string{"feature"},
+			noHooks:   false,
+			noOpen:    false,
+			fromValue: strPtr(fromFlagSentinel),
+			setupFx: func(fx *effects.TestEffects) {
+				fx.Branches = []git.Branch{
+					{RefName: "main", Name: "main", DisplayName: "main", IsLocal: true},
+				}
+				fx.SelectFromBranchError = errors.New("user cancelled")
+			},
+			wantCtx: nil,
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -371,7 +464,14 @@ func TestBuildAddContext(t *testing.T) {
 			fx := baseTestFx()
 			tt.setupFx(fx)
 
-			ctx, err := BuildAddContext(fx, tt.args, tt.noHooks, tt.noOpen)
+			fromValue := ""
+			fromChanged := false
+			if tt.fromValue != nil {
+				fromValue = *tt.fromValue
+				fromChanged = true
+			}
+
+			ctx, err := BuildAddContext(fx, tt.args, tt.noHooks, tt.noOpen, fromValue, fromChanged)
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -618,7 +718,7 @@ func TestAddCommand_EndToEnd(t *testing.T) {
 			tt.setupFx(fx)
 
 			// Build context from effects (simulating handler)
-			ctx, err := BuildAddContext(fx, tt.args, tt.noHooks, tt.noOpen)
+			ctx, err := BuildAddContext(fx, tt.args, tt.noHooks, tt.noOpen, "", false)
 			if tt.wantErr && err != nil {
 				// Early error in context building
 				require.Error(t, err)

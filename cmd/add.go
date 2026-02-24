@@ -14,7 +14,10 @@ import (
 var (
 	addNoHooksFlag bool
 	addNoOpenFlag  bool
+	addFromFlag    string
 )
+
+const fromFlagSentinel = ":"
 
 var addCmd = &cobra.Command{
 	Use:   "add [branch]",
@@ -57,7 +60,8 @@ var addCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fx := effects.NewRealEffects()
 
-		ctx, err := BuildAddContext(fx, args, addNoHooksFlag, addNoOpenFlag)
+		fromChanged := cmd.Flags().Changed("from")
+		ctx, err := BuildAddContext(fx, args, addNoHooksFlag, addNoOpenFlag, addFromFlag, fromChanged)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
@@ -70,7 +74,16 @@ var addCmd = &cobra.Command{
 
 // BuildAddContext gathers all inputs needed to plan the add command.
 // It handles interactive branch selection if no branch is provided.
-func BuildAddContext(fx effects.Effects, args []string, noHooks, noOpen bool) (core.AddContext, error) {
+// fromValue and fromChanged represent the --from flag state:
+//   - fromChanged=false: default behavior (origin/main or HEAD)
+//   - fromChanged=true, fromValue=sentinel: interactive from-branch picker
+//   - fromChanged=true, fromValue=<branch>: use that branch as base
+func BuildAddContext(fx effects.Effects, args []string, noHooks, noOpen bool, fromValue string, fromChanged bool) (core.AddContext, error) {
+	// Validate: --from requires an explicit branch name
+	if fromChanged && len(args) == 0 {
+		return core.AddContext{}, fmt.Errorf("--from requires a branch name argument\n\nUsage: sprout add <branch> --from [base-branch]")
+	}
+
 	// Get repo root
 	repoRoot, err := fx.GetRepoRoot()
 	if err != nil {
@@ -135,14 +148,10 @@ func BuildAddContext(fx effects.Effects, args []string, noHooks, noOpen bool) (c
 		return core.AddContext{}, fmt.Errorf("failed to check remote branch: %w", err)
 	}
 
-	// Resolve base ref for new branches: prefer origin/main, fall back to HEAD
-	fromRef := "HEAD"
-	hasRemoteMain, err := fx.RemoteBranchExists(repoRoot, "main")
+	// Resolve base ref for new branches
+	fromRef, err := resolveFromRef(fx, repoRoot, fromValue, fromChanged)
 	if err != nil {
-		return core.AddContext{}, fmt.Errorf("failed to check origin/main: %w", err)
-	}
-	if hasRemoteMain {
-		fromRef = "origin/main"
+		return core.AddContext{}, err
 	}
 
 	// Load config
@@ -176,8 +185,46 @@ func BuildAddContext(fx effects.Effects, args []string, noHooks, noOpen bool) (c
 	}, nil
 }
 
+// resolveFromRef determines the base ref for new branch creation.
+func resolveFromRef(fx effects.Effects, repoRoot string, fromValue string, fromChanged bool) (string, error) {
+	// Explicit --from <branch>
+	if fromChanged && fromValue != fromFlagSentinel {
+		return fromValue, nil
+	}
+
+	// Interactive --from (no value): show picker
+	if fromChanged {
+		branches, err := fx.ListBranches(repoRoot)
+		if err != nil {
+			return "", fmt.Errorf("failed to list branches: %w", err)
+		}
+		if len(branches) == 0 {
+			return "", fmt.Errorf("no branches found")
+		}
+
+		idx, err := fx.SelectFromBranch(branches)
+		if err != nil {
+			return "", fmt.Errorf("base branch selection cancelled: %w", err)
+		}
+
+		return branches[idx].DisplayName, nil
+	}
+
+	// Default: origin/main or HEAD
+	hasRemoteMain, err := fx.RemoteBranchExists(repoRoot, "main")
+	if err != nil {
+		return "", fmt.Errorf("failed to check origin/main: %w", err)
+	}
+	if hasRemoteMain {
+		return "origin/main", nil
+	}
+	return "HEAD", nil
+}
+
 func init() {
 	rootCmd.AddCommand(addCmd)
 	addCmd.Flags().BoolVar(&addNoHooksFlag, "no-hooks", false, "Skip running on_create hooks even if .sprout.yml exists")
 	addCmd.Flags().BoolVar(&addNoOpenFlag, "no-open", false, "Skip opening the worktree in an editor")
+	addCmd.Flags().StringVar(&addFromFlag, "from", "", "Base branch to create the new branch from (interactive picker if no value given)")
+	addCmd.Flags().Lookup("from").NoOptDefVal = fromFlagSentinel
 }
