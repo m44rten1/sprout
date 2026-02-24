@@ -75,6 +75,22 @@ sprout add feat/amazing-stuff --no-open
 
 Create the worktree without opening the editor (useful for automation).
 
+**Branch from a specific base:**
+
+```bash
+sprout add feat/sub-feature --from feat/parent-feature
+```
+
+Create a new worktree branching from `feat/parent-feature` instead of `main`.
+
+**Interactively pick the base branch:**
+
+```bash
+sprout add feat/new-feature --from
+```
+
+Opens a fuzzy finder to select which branch to branch from (defaults to `main`).
+
 ### Open a worktree
 
 Jump back into the zone.

@@ -208,6 +208,7 @@ worktree-path  = <worktree-root>/<branch>/<repo-slug>
 
    - If branch exists locally: checkout that branch
    - Else if `origin/<branch>` exists: create local branch from remote with `--no-track` flag
+   - Else if `--from` was specified: create new branch from the given base ref with `--no-track`
    - Else if `origin/main` exists: create new branch from `origin/main` with `--no-track`
    - Else if local `main` exists: create new branch from `main` with `--no-track`
    - Else: create new branch from `HEAD` with `--no-track`
@@ -227,11 +228,26 @@ worktree-path  = <worktree-root>/<branch>/<repo-slug>
 
 - `--no-hooks`: Skip running `on_create` hooks even if `.sprout.yml` exists
 - `--no-open`: Skip opening the worktree in an editor
+- `--from [branch]`: Specify the base branch for the new worktree. If no value is given, opens an interactive picker. Defaults to `origin/main` when not used.
+
+**Examples:**
+
+```bash
+# Create from main (default)
+sprout add feat/new-feature
+
+# Create from a specific branch
+sprout add feat/sub-feature --from feat/parent-feature
+
+# Interactively select the base branch
+sprout add feat/new-feature --from
+```
 
 **Notes:**
 
 - sprout creates all parent directories automatically
 - If the worktree already exists, sprout opens it instead of failing
+- `--from` requires an explicit branch name (cannot be used with interactive branch selection)
 - See [HOOKS.md](HOOKS.md) for detailed hook documentation
 
 ⸻
@@ -740,7 +756,7 @@ Potential enhancements not yet implemented:
 **Configuration:**
 
 - Global config file (`~/.config/sprout/config.yaml`) for:
-  - Default base branch (e.g. `develop` instead of `main`)
+  - Default base branch (e.g. `develop` instead of `main`, currently overridable per-command via `--from`)
   - Editor command override
   - Custom sprout root (override `~/.sprout`)
 
