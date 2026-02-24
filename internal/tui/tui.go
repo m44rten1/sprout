@@ -8,12 +8,9 @@ import (
 // items is the list of items to display.
 // labelFunc returns the string representation of an item.
 // previewFunc (optional) returns the preview string for an item.
-func SelectOne[T any](items []T, labelFunc func(T) string, previewFunc func(T) string) (int, error) {
-	idx, err := fuzzyfinder.Find(
-		items,
-		func(i int) string {
-			return labelFunc(items[i])
-		},
+// opts are additional fuzzyfinder options (e.g. fuzzyfinder.WithHeader).
+func SelectOne[T any](items []T, labelFunc func(T) string, previewFunc func(T) string, opts ...fuzzyfinder.Option) (int, error) {
+	baseOpts := []fuzzyfinder.Option{
 		fuzzyfinder.WithPreviewWindow(func(i, w, h int) string {
 			if i == -1 {
 				return ""
@@ -23,6 +20,15 @@ func SelectOne[T any](items []T, labelFunc func(T) string, previewFunc func(T) s
 			}
 			return ""
 		}),
+	}
+	baseOpts = append(baseOpts, opts...)
+
+	idx, err := fuzzyfinder.Find(
+		items,
+		func(i int) string {
+			return labelFunc(items[i])
+		},
+		baseOpts...,
 	)
 	if err != nil {
 		return -1, err
