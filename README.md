@@ -91,6 +91,18 @@ sprout add feat/sub-feature --from-current
 
 Create a new worktree branching from whatever branch you currently have checked out.
 
+**Move your current changes into the new worktree:**
+
+```bash
+sprout add feat/complex-thing --from-current --move-current-changes
+```
+
+Useful when you started working in your current worktree and later realize the change deserves its own branch/worktree. Sprout stashes the current tracked and untracked changes, creates the new worktree, applies that stash there, and leaves the original worktree clean again.
+
+If `on_create` hooks are configured, sprout applies your moved changes before opening the editor and running hooks so the new worktree reflects the state you actually intend to continue from.
+
+If applying the stash fails, sprout keeps the temporary stash and prints recovery instructions instead of dropping your work.
+
 **Interactively pick the base branch:**
 
 ```bash
@@ -98,6 +110,14 @@ sprout add feat/new-feature --from ?
 ```
 
 Opens a fuzzy finder to select which branch to branch from (defaults to `main`).
+
+**Preview the move without changing anything:**
+
+```bash
+sprout add feat/complex-thing --from-current --move-current-changes --dry-run
+```
+
+Shows the stash/create/apply flow that would run without modifying the current or target worktree.
 
 ### Open a worktree
 

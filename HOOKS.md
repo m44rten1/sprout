@@ -146,6 +146,8 @@ sprout add feat/new-feature
 
 Your editor opens immediately, then hooks run in the terminal. This allows you to start browsing code while dependencies install and builds complete.
 
+When `--move-current-changes` is used, sprout first applies the moved changes in the new worktree. It then opens the editor and runs `on_create` hooks against that updated worktree state.
+
 **Skip running hooks:**
 
 ```bash
@@ -161,6 +163,14 @@ sprout add feat/new-feature --no-open
 ```
 
 Useful for automation or CI/CD scenarios where you only want the worktree created.
+
+**Move your current work into the new worktree:**
+
+```bash
+sprout add feat/new-feature --from-current --move-current-changes
+```
+
+If stash application fails, sprout keeps the temporary stash and prints manual recovery instructions instead of dropping your work.
 
 ### `sprout open`
 

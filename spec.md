@@ -215,13 +215,24 @@ worktree-path  = <worktree-root>/<branch>/<repo-slug>
 
    The `--no-track` flag prevents automatic upstream configuration for new branches.
 
-5. If hooks should run (repo is trusted and `.sprout.yml` has `on_create` hooks):
+5. If `--move-current-changes` is set:
 
-   - Open the worktree in an editor immediately (unless `--no-open` is set)
+   - Check that the current worktree has uncommitted changes
+   - Fail if the target worktree already exists
+   - Create a temporary stash including untracked files
+   - Create the target worktree using the normal add flow, but defer editor opening and hook execution
+   - Apply the temporary stash in the new worktree
+   - Drop the temporary stash only after a successful apply
+   - If stash apply fails, keep the stash and print manual recovery guidance
+
+6. If hooks should run (repo is trusted and `.sprout.yml` has `on_create` hooks):
+
+   - For normal `sprout add`: open the worktree in an editor immediately (unless `--no-open` is set)
    - Run `on_create` hooks in the terminal
    - This allows browsing code while dependencies install
+   - For `--move-current-changes`: apply the moved changes first, then open the editor, then run hooks
 
-6. If no hooks to run and `--no-open` not set:
+7. If no hooks to run and `--no-open` not set:
    - Open the worktree in an editor after creation
 
 **Flags:**
@@ -230,6 +241,7 @@ worktree-path  = <worktree-root>/<branch>/<repo-slug>
 - `--no-open`: Skip opening the worktree in an editor
 - `--from <branch>`: Specify the base branch for the new worktree. Use `--from ?` to open an interactive picker. Defaults to `origin/main` when not used.
 - `--from-current`: Use the currently checked-out branch as the base for the new worktree.
+- `--move-current-changes`: Move the current worktree's tracked and untracked changes into the new worktree.
 
 **Examples:**
 
@@ -245,6 +257,12 @@ sprout add feat/new-feature --from ?
 
 # Create from the currently checked-out branch
 sprout add feat/sub-feature --from-current
+
+# Move current work into a new worktree
+sprout add feat/complex-thing --from-current --move-current-changes
+
+# Preview the move flow without changing anything
+sprout add feat/complex-thing --from-current --move-current-changes --dry-run
 ```
 
 **Notes:**
@@ -253,6 +271,9 @@ sprout add feat/sub-feature --from-current
 - If the worktree already exists, sprout opens it instead of failing
 - `--from` and `--from-current` require an explicit branch name argument (cannot be used with interactive branch selection)
 - `--from` and `--from-current` are mutually exclusive
+- `--move-current-changes` requires uncommitted changes in the current worktree and a new target worktree
+- `--move-current-changes` includes untracked files but does not include ignored files
+- `--dry-run` describes the stash/create/apply flow without stashing, creating, or applying anything
 - See [HOOKS.md](HOOKS.md) for detailed hook documentation
 
 ⸻
