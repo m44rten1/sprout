@@ -24,6 +24,9 @@ type TestEffects struct {
 	Files            map[string]bool   // Paths that "exist"
 	GitCommandOutput map[string]string // Key: "dir\nargs..." -> output
 	GitCommandErrors map[string]error  // Key: "dir\nargs..." -> error
+	DirtyWorktrees   map[string]bool   // path -> dirty state
+	CreatedStashes   map[string]string // path -> stash OID
+	AppliedStashes   map[string]string // path -> stash OID
 
 	// Branch existence mocking
 	LocalBranches  map[string]bool // branch name -> exists locally
@@ -59,6 +62,7 @@ type TestEffects struct {
 	GetRepoRootErr         error
 	GetMainWorktreePathErr error
 	GetCurrentBranchErr    error
+	IsWorktreeDirtyErr     error
 	ListWorktreesErr       error
 	ListBranchesErr        error
 	MkdirAllErr            error
@@ -85,9 +89,13 @@ type TestEffects struct {
 	GetRepoRootCalls            int
 	GetMainWorktreePathCalls    int
 	GetCurrentBranchCalls       int
+	IsWorktreeDirtyCalls        int
 	ListWorktreesCalls          int
 	ListBranchesCalls           int
 	RunGitCommandCalls          int
+	CreateStashCalls            int
+	ApplyStashCalls             int
+	DropStashCalls              int
 	FileExistsCalls             int
 	MkdirAllCalls               int
 	LoadConfigCalls             int
@@ -123,6 +131,7 @@ type TestEffects struct {
 	LoadConfigCurrentArgs      []string   // currentPath args passed to LoadConfig
 	LoadConfigMainArgs         []string   // mainPath args passed to LoadConfig
 	IsTrustedArgs              []string   // repoRoot args passed to IsTrusted
+	IsWorktreeDirtyArgs        []string   // path args passed to IsWorktreeDirty
 	TrustRepoRepos             []string   // Repos that had TrustRepo called
 	UntrustRepoRepos           []string   // Repos that had UntrustRepo called
 	PrintedMsgs                []string   // Messages printed via Print
@@ -138,6 +147,9 @@ type TestEffects struct {
 	PromptTrustRepoInvocations []PromptTrustCall
 	ReadDirArgs                []string // path args passed to ReadDir
 	GetWorktreeStatusArgs      []string // path args passed to GetWorktreeStatus
+	CreateStashInvocations     []CreateStashCall
+	ApplyStashInvocations      []StashCall
+	DropStashInvocations       []StashCall
 
 	// Branch operations tracking
 	IsBranchMergedIntoMainQueries []BranchQuery
@@ -211,6 +223,19 @@ type PromptTrustCall struct {
 	HookCommands     []string
 }
 
+// CreateStashCall represents a stash creation invocation.
+type CreateStashCall struct {
+	Path             string
+	Message          string
+	IncludeUntracked bool
+}
+
+// StashCall represents applying or dropping a stash.
+type StashCall struct {
+	Path     string
+	StashOID string
+}
+
 // NewTestEffects creates a new TestEffects with sensible defaults.
 func NewTestEffects() *TestEffects {
 	return &TestEffects{
@@ -223,6 +248,9 @@ func NewTestEffects() *TestEffects {
 		Files:                      make(map[string]bool),
 		GitCommandOutput:           make(map[string]string),
 		GitCommandErrors:           make(map[string]error),
+		DirtyWorktrees:             make(map[string]bool),
+		CreatedStashes:             make(map[string]string),
+		AppliedStashes:             make(map[string]string),
 		LocalBranches:              make(map[string]bool),
 		RemoteBranches:             make(map[string]bool),
 		WorktreePaths:              make(map[string]string),
@@ -231,6 +259,7 @@ func NewTestEffects() *TestEffects {
 		LoadConfigCurrentArgs:      []string{},
 		LoadConfigMainArgs:         []string{},
 		IsTrustedArgs:              []string{},
+		IsWorktreeDirtyArgs:        []string{},
 		TrustRepoRepos:             []string{},
 		PrintedMsgs:                []string{},
 		PrintedErrs:                []string{},
@@ -243,6 +272,9 @@ func NewTestEffects() *TestEffects {
 		GetWorktreePathQueries:     []WorktreePathQuery{},
 		GetWorktreeRootArgs:        []string{},
 		PromptTrustRepoInvocations: []PromptTrustCall{},
+		CreateStashInvocations:     []CreateStashCall{},
+		ApplyStashInvocations:      []StashCall{},
+		DropStashInvocations:       []StashCall{},
 		SproutRoot:                 "/home/user/.local/share/sprout",
 		WorktreeRoot:               "/home/user/.local/share/sprout/test-12345678",
 		DirEntries:                 make(map[string][]os.DirEntry),
@@ -297,6 +329,15 @@ func (t *TestEffects) GetCurrentBranch(repoRoot string) (string, error) {
 	return t.CurrentBranch, nil
 }
 
+func (t *TestEffects) IsWorktreeDirty(path string) (bool, error) {
+	t.IsWorktreeDirtyCalls++
+	t.IsWorktreeDirtyArgs = append(t.IsWorktreeDirtyArgs, path)
+	if t.IsWorktreeDirtyErr != nil {
+		return false, t.IsWorktreeDirtyErr
+	}
+	return t.DirtyWorktrees[path], nil
+}
+
 func (t *TestEffects) ListWorktrees(repoRoot string) ([]git.Worktree, error) {
 	t.ListWorktreesCalls++
 	t.ListWorktreesArgs = append(t.ListWorktreesArgs, repoRoot)
@@ -332,6 +373,61 @@ func (t *TestEffects) RunGitCommand(dir string, args ...string) (string, error) 
 
 	// Default: success with empty output
 	return "", nil
+}
+
+func (t *TestEffects) CreateStash(path, message string, includeUntracked bool) (string, error) {
+	t.CreateStashCalls++
+	t.CreateStashInvocations = append(t.CreateStashInvocations, CreateStashCall{
+		Path:             path,
+		Message:          message,
+		IncludeUntracked: includeUntracked,
+	})
+
+	key := path + "\nstash-create"
+	if err, exists := t.GitCommandErrors[key]; exists {
+		return "", err
+	}
+
+	stashOID := t.CreatedStashes[path]
+	if stashOID == "" {
+		stashOID = "stash@mock"
+	}
+
+	t.DirtyWorktrees[path] = false
+	return stashOID, nil
+}
+
+func (t *TestEffects) ApplyStash(path, stashOID string) error {
+	t.ApplyStashCalls++
+	t.ApplyStashInvocations = append(t.ApplyStashInvocations, StashCall{
+		Path:     path,
+		StashOID: stashOID,
+	})
+
+	key := path + "\nstash-apply " + stashOID
+	if err, exists := t.GitCommandErrors[key]; exists {
+		return err
+	}
+
+	t.AppliedStashes[path] = stashOID
+	t.DirtyWorktrees[path] = true
+	return nil
+}
+
+func (t *TestEffects) DropStash(path, stashOID string) error {
+	t.DropStashCalls++
+	t.DropStashInvocations = append(t.DropStashInvocations, StashCall{
+		Path:     path,
+		StashOID: stashOID,
+	})
+
+	key := path + "\nstash-drop " + stashOID
+	if err, exists := t.GitCommandErrors[key]; exists {
+		return err
+	}
+
+	delete(t.CreatedStashes, path)
+	return nil
 }
 
 func (t *TestEffects) FileExists(path string) bool {

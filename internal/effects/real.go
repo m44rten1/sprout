@@ -39,6 +39,10 @@ func (r *RealEffects) GetCurrentBranch(repoRoot string) (string, error) {
 	return git.GetCurrentBranch(repoRoot)
 }
 
+func (r *RealEffects) IsWorktreeDirty(path string) (bool, error) {
+	return git.IsDirty(path)
+}
+
 func (r *RealEffects) ListWorktrees(repoRoot string) ([]git.Worktree, error) {
 	return git.ListWorktrees(repoRoot)
 }
@@ -49,6 +53,18 @@ func (r *RealEffects) ListBranches(repoRoot string) ([]git.Branch, error) {
 
 func (r *RealEffects) RunGitCommand(dir string, args ...string) (string, error) {
 	return git.RunGitCommand(dir, args...)
+}
+
+func (r *RealEffects) CreateStash(path, message string, includeUntracked bool) (string, error) {
+	return git.CreateStash(path, message, includeUntracked)
+}
+
+func (r *RealEffects) ApplyStash(path, stashOID string) error {
+	return git.ApplyStash(path, stashOID)
+}
+
+func (r *RealEffects) DropStash(path, stashOID string) error {
+	return git.DropStash(path, stashOID)
 }
 
 // FileExists returns true only if the path exists.

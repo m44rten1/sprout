@@ -231,6 +231,87 @@ func IsDirty(path string) (bool, error) {
 	return strings.TrimSpace(out) != "", nil
 }
 
+// CreateStash saves the current worktree state and returns the new stash OID.
+// When includeUntracked is true, untracked files are included in the stash.
+func CreateStash(path, message string, includeUntracked bool) (string, error) {
+	beforeOID, hadBefore, err := resolveRevision(path, "stash@{0}")
+	if err != nil {
+		return "", err
+	}
+
+	args := []string{"stash", "push", "-m", message}
+	if includeUntracked {
+		args = append(args, "--include-untracked")
+	}
+
+	if _, err := RunGitCommand(path, args...); err != nil {
+		return "", err
+	}
+
+	afterOID, hasAfter, err := resolveRevision(path, "stash@{0}")
+	if err != nil {
+		return "", err
+	}
+	if !hasAfter {
+		return "", fmt.Errorf("stash push did not create a stash entry")
+	}
+	if hadBefore && afterOID == beforeOID {
+		return "", fmt.Errorf("stash push did not create a new stash entry")
+	}
+
+	return afterOID, nil
+}
+
+// ApplyStash applies a stash commit to the target worktree and restores index state when possible.
+func ApplyStash(path, stashOID string) error {
+	_, err := RunGitCommand(path, "stash", "apply", "--index", stashOID)
+	return err
+}
+
+// DropStash removes a stash entry identified by its commit OID.
+func DropStash(path, stashOID string) error {
+	ref, found, err := findStashRefByOID(path, stashOID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("stash entry %s not found", stashOID)
+	}
+
+	_, err = RunGitCommand(path, "stash", "drop", ref)
+	return err
+}
+
+func resolveRevision(path, rev string) (string, bool, error) {
+	out, err := RunGitCommand(path, "rev-parse", "--verify", "-q", rev)
+	if err != nil {
+		if strings.TrimSpace(out) == "" {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	return strings.TrimSpace(out), true, nil
+}
+
+func findStashRefByOID(path, stashOID string) (string, bool, error) {
+	out, err := RunGitCommand(path, "stash", "list", "--format=%gd %H")
+	if err != nil {
+		return "", false, err
+	}
+
+	for _, line := range strings.Split(out, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 2 {
+			continue
+		}
+		if fields[1] == stashOID {
+			return fields[0], true, nil
+		}
+	}
+
+	return "", false, nil
+}
+
 // GetAheadBehind returns how many commits the worktree is ahead/behind its upstream.
 // Returns (0, 0, nil) if there is no upstream tracking branch.
 func GetAheadBehind(path string) (ahead, behind int, err error) {

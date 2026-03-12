@@ -14,9 +14,13 @@ type Effects interface {
 	GetRepoRoot() (string, error)
 	GetMainWorktreePath() (string, error)
 	GetCurrentBranch(repoRoot string) (string, error)
+	IsWorktreeDirty(path string) (bool, error)
 	ListWorktrees(repoRoot string) ([]git.Worktree, error)
 	ListBranches(repoRoot string) ([]git.Branch, error)
 	RunGitCommand(dir string, args ...string) (string, error)
+	CreateStash(path, message string, includeUntracked bool) (string, error)
+	ApplyStash(path, stashOID string) error
+	DropStash(path, stashOID string) error
 
 	// File system
 	FileExists(path string) bool
