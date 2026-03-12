@@ -118,6 +118,31 @@ func TestGetDefaultBranchErrorsWhenItCannotBeDetermined(t *testing.T) {
 	}
 }
 
+func TestIsBranchMergedIntoMainUsesLocalDefaultBranch(t *testing.T) {
+	repo := initTestRepo(t)
+	remote := t.TempDir()
+	runGit(t, remote, "init", "--bare")
+
+	runGit(t, repo, "remote", "add", "origin", remote)
+	runGit(t, repo, "push", "-u", "origin", "main")
+
+	runGit(t, repo, "checkout", "-b", "feature")
+	writeFile(t, filepath.Join(repo, "tracked.txt"), "feature change\n")
+	runGit(t, repo, "add", "tracked.txt")
+	runGit(t, repo, "commit", "-m", "feature commit")
+
+	runGit(t, repo, "checkout", "main")
+	runGit(t, repo, "merge", "--ff-only", "feature")
+
+	merged, err := IsBranchMergedIntoMain(repo, "feature")
+	if err != nil {
+		t.Fatalf("IsBranchMergedIntoMain() error = %v", err)
+	}
+	if !merged {
+		t.Fatal("expected branch merged into local main to be considered merged")
+	}
+}
+
 func initTestRepo(t *testing.T) string {
 	t.Helper()
 

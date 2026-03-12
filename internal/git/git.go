@@ -429,10 +429,12 @@ func IsBranchMergedIntoMain(repoRoot, branch string) (bool, error) {
 		return false, err
 	}
 
-	// Check origin/<default> first, fall back to local
-	baseRef := "origin/" + defaultBranch
+	// Prefer the local default branch tip so local merges are recognized even
+	// before they are pushed. Fall back to the remote-tracking branch only when
+	// the local default branch is unavailable.
+	baseRef := defaultBranch
 	if _, err := RunGitCommand(repoRoot, "rev-parse", "--verify", baseRef); err != nil {
-		baseRef = defaultBranch
+		baseRef = "origin/" + defaultBranch
 	}
 
 	// Count commits in branch not in base
