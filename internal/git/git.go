@@ -19,8 +19,12 @@ func GetRepoRoot() (string, error) {
 // GetMainWorktreePath returns the absolute path to the main worktree.
 // This is useful for finding config files that might be gitignored but exist in the main worktree.
 func GetMainWorktreePath() (string, error) {
+	return getMainWorktreePathForRepo("")
+}
+
+func getMainWorktreePathForRepo(repoRoot string) (string, error) {
 	// The first worktree in the list is always the main worktree
-	worktrees, err := ListWorktrees("")
+	worktrees, err := ListWorktrees(repoRoot)
 	if err != nil {
 		return "", fmt.Errorf("failed to list worktrees: %w", err)
 	}
@@ -350,15 +354,16 @@ func GetDefaultBranch(path string) (string, error) {
 		}
 	}
 
-	// Fallback: check if main exists, then master
-	if _, err := RunGitCommand(path, "rev-parse", "--verify", "origin/main"); err == nil {
-		return "main", nil
-	}
-	if _, err := RunGitCommand(path, "rev-parse", "--verify", "origin/master"); err == nil {
-		return "master", nil
+	// Fall back to the branch checked out in the main worktree.
+	mainWorktreePath, err := getMainWorktreePathForRepo(path)
+	if err == nil {
+		branch, branchErr := GetCurrentBranch(mainWorktreePath)
+		if branchErr == nil && branch != "" && branch != "HEAD" {
+			return branch, nil
+		}
 	}
 
-	return "main", nil // Final fallback
+	return "", fmt.Errorf("could not determine default branch")
 }
 
 // IsUnmerged checks if the worktree has commits not in the base branch.

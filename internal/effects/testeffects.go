@@ -33,9 +33,11 @@ type TestEffects struct {
 	RemoteBranches map[string]bool // branch name -> exists on remote
 
 	// Branch operations mocking
+	DefaultBranch             string
 	BranchMergedIntoMain      map[string]bool               // branch -> is merged into main
 	BranchUpstreams           map[string]git.BranchUpstream // branch -> upstream info
 	BranchHasUnpushedCommits  map[string]bool               // branch -> has unpushed commits
+	GetDefaultBranchErr       error
 	IsBranchMergedIntoMainErr error
 	HasUnpushedCommitsErr     error
 	DeleteLocalBranchErr      error
@@ -118,6 +120,7 @@ type TestEffects struct {
 	ReadDirCalls                int
 	UserHomeDirCalls            int
 	GetWorktreeStatusCalls      int
+	GetDefaultBranchCalls       int
 	IsBranchMergedIntoMainCalls int
 	GetBranchUpstreamCalls      int
 	HasUnpushedCommitsCalls     int
@@ -152,6 +155,7 @@ type TestEffects struct {
 	DropStashInvocations       []StashCall
 
 	// Branch operations tracking
+	GetDefaultBranchQueries       []string
 	IsBranchMergedIntoMainQueries []BranchQuery
 	GetBranchUpstreamQueries      []BranchQuery
 	HasUnpushedCommitsQueries     []UnpushedCommitsQuery
@@ -283,10 +287,12 @@ func NewTestEffects() *TestEffects {
 		ReadDirArgs:                []string{},
 		GetWorktreeStatusArgs:      []string{},
 		// Branch operations
+		DefaultBranch:                 "main",
 		BranchMergedIntoMain:          make(map[string]bool),
 		BranchUpstreams:               make(map[string]git.BranchUpstream),
 		BranchHasUnpushedCommits:      make(map[string]bool),
 		RemoteBranchExistsOnMap:       make(map[string]bool),
+		GetDefaultBranchQueries:       []string{},
 		IsBranchMergedIntoMainQueries: []BranchQuery{},
 		GetBranchUpstreamQueries:      []BranchQuery{},
 		HasUnpushedCommitsQueries:     []UnpushedCommitsQuery{},
@@ -662,6 +668,18 @@ func (t *TestEffects) GetWorktreeStatus(path string) git.WorktreeStatus {
 	}
 	// Default: clean worktree
 	return git.WorktreeStatus{}
+}
+
+func (t *TestEffects) GetDefaultBranch(repoRoot string) (string, error) {
+	t.GetDefaultBranchCalls++
+	t.GetDefaultBranchQueries = append(t.GetDefaultBranchQueries, repoRoot)
+	if t.GetDefaultBranchErr != nil {
+		return "", t.GetDefaultBranchErr
+	}
+	if t.DefaultBranch == "" {
+		return "", fmt.Errorf("could not determine default branch")
+	}
+	return t.DefaultBranch, nil
 }
 
 func (t *TestEffects) IsBranchMergedIntoMain(repoRoot, branch string) (bool, error) {

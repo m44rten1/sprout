@@ -67,6 +67,7 @@ type Effects interface {
 	RemoteBranchExists(repoRoot, branch string) (bool, error)
 
 	// Branch operations
+	GetDefaultBranch(repoRoot string) (string, error)
 	IsBranchMergedIntoMain(repoRoot, branch string) (bool, error)
 	GetBranchUpstream(repoRoot, branch string) git.BranchUpstream
 	HasUnpushedCommits(repoRoot, branch, remote, remoteBranch string) (bool, error)

@@ -89,6 +89,35 @@ func TestDropStashReturnsErrorWhenEntryMissing(t *testing.T) {
 	}
 }
 
+func TestGetDefaultBranchFallsBackToMainWorktreeBranch(t *testing.T) {
+	repo := t.TempDir()
+	runGit(t, repo, "init", "-b", "dev")
+	runGit(t, repo, "config", "user.name", "Test User")
+	runGit(t, repo, "config", "user.email", "test@example.com")
+
+	writeFile(t, filepath.Join(repo, "tracked.txt"), "initial\n")
+	runGit(t, repo, "add", "tracked.txt")
+	runGit(t, repo, "commit", "-m", "initial commit")
+
+	branch, err := GetDefaultBranch(repo)
+	if err != nil {
+		t.Fatalf("GetDefaultBranch() error = %v", err)
+	}
+	if branch != "dev" {
+		t.Fatalf("expected default branch dev, got %q", branch)
+	}
+}
+
+func TestGetDefaultBranchErrorsWhenItCannotBeDetermined(t *testing.T) {
+	repo := initTestRepo(t)
+	runGit(t, repo, "checkout", "--detach")
+
+	_, err := GetDefaultBranch(repo)
+	if err == nil {
+		t.Fatal("expected GetDefaultBranch() to fail in detached HEAD without origin/HEAD")
+	}
+}
+
 func initTestRepo(t *testing.T) string {
 	t.Helper()
 

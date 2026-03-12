@@ -292,6 +292,10 @@ func (r *RealEffects) PromptTrustRepo(mainWorktreePath, hookType string, hookCom
 
 // Branch operations
 
+func (r *RealEffects) GetDefaultBranch(repoRoot string) (string, error) {
+	return git.GetDefaultBranch(repoRoot)
+}
+
 func (r *RealEffects) IsBranchMergedIntoMain(repoRoot, branch string) (bool, error) {
 	return git.IsBranchMergedIntoMain(repoRoot, branch)
 }
