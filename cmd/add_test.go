@@ -33,16 +33,17 @@ func TestBuildAddContext(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name          string
-		args          []string
-		noHooks       bool
-		noOpen        bool
-		fromValue     *string // nil = flag not set; pointer to value = flag set
-		fromCurrent   bool
-		setupFx       func(*effects.TestEffects)
-		wantCtx       *core.AddContext // nil if error expected
-		wantErr       bool
-		assertEffects func(t *testing.T, fx *effects.TestEffects)
+		name               string
+		args               []string
+		noHooks            bool
+		noOpen             bool
+		fromValue          *string // nil = flag not set; pointer to value = flag set
+		fromCurrent        bool
+		moveCurrentChanges bool
+		setupFx            func(*effects.TestEffects)
+		wantCtx            *core.AddContext // nil if error expected
+		wantErr            bool
+		assertEffects      func(t *testing.T, fx *effects.TestEffects)
 	}{
 		{
 			name:    "explicit branch with new worktree",
@@ -508,6 +509,61 @@ func TestBuildAddContext(t *testing.T) {
 			wantCtx:     nil,
 			wantErr:     true,
 		},
+		{
+			name:               "move current changes checks dirty worktree state",
+			args:               []string{"feature"},
+			noHooks:            false,
+			noOpen:             false,
+			moveCurrentChanges: true,
+			setupFx: func(fx *effects.TestEffects) {
+				fx.LocalBranches["feature"] = false
+				fx.RemoteBranches["feature"] = false
+				fx.WorktreePaths["feature"] = "/test/repo-sprout/feature"
+				fx.Files["/test/repo-sprout/feature"] = false
+				fx.DirtyWorktrees["/test/repo"] = true
+			},
+			wantCtx: &core.AddContext{
+				Branch:               "feature",
+				RepoRoot:             "/test/repo",
+				MainWorktreePath:     "/test/repo",
+				WorktreePath:         "/test/repo-sprout/feature",
+				WorktreeExists:       false,
+				CurrentWorktreeDirty: true,
+				LocalBranchExists:    false,
+				RemoteBranchExists:   false,
+				FromRef:              "origin/main",
+				Config:               &config.Config{Hooks: config.HooksConfig{}},
+				IsTrusted:            false,
+				NoHooks:              false,
+				NoOpen:               false,
+				MoveCurrentChanges:   true,
+			},
+			wantErr: false,
+			assertEffects: func(t *testing.T, fx *effects.TestEffects) {
+				assert.Equal(t, 1, fx.IsWorktreeDirtyCalls)
+				require.Len(t, fx.IsWorktreeDirtyArgs, 1)
+				assert.Equal(t, "/test/repo", fx.IsWorktreeDirtyArgs[0])
+			},
+		},
+		{
+			name:               "move current changes propagates dirty check failure",
+			args:               []string{"feature"},
+			noHooks:            false,
+			noOpen:             false,
+			moveCurrentChanges: true,
+			setupFx: func(fx *effects.TestEffects) {
+				fx.LocalBranches["feature"] = false
+				fx.RemoteBranches["feature"] = false
+				fx.WorktreePaths["feature"] = "/test/repo-sprout/feature"
+				fx.Files["/test/repo-sprout/feature"] = false
+				fx.IsWorktreeDirtyErr = errors.New("status failed")
+			},
+			wantCtx: nil,
+			wantErr: true,
+			assertEffects: func(t *testing.T, fx *effects.TestEffects) {
+				assert.Equal(t, 1, fx.IsWorktreeDirtyCalls)
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -525,7 +581,7 @@ func TestBuildAddContext(t *testing.T) {
 				fromChanged = true
 			}
 
-			ctx, err := BuildAddContext(fx, tt.args, tt.noHooks, tt.noOpen, fromValue, fromChanged, tt.fromCurrent)
+			ctx, err := BuildAddContext(fx, tt.args, tt.noHooks, tt.noOpen, fromValue, fromChanged, tt.fromCurrent, tt.moveCurrentChanges)
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -548,15 +604,16 @@ func TestAddCommand_EndToEnd(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
-		args           []string
-		noHooks        bool
-		noOpen         bool
-		setupFx        func(*effects.TestEffects)
-		assertBehavior func(t *testing.T, fx *effects.TestEffects)
-		wantErr        bool
-		wantExit       bool
-		wantExitCode   int
+		name               string
+		args               []string
+		noHooks            bool
+		noOpen             bool
+		moveCurrentChanges bool
+		setupFx            func(*effects.TestEffects)
+		assertBehavior     func(t *testing.T, fx *effects.TestEffects)
+		wantErr            bool
+		wantExit           bool
+		wantExitCode       int
 	}{
 		{
 			name:    "create new worktree with local branch",
@@ -772,7 +829,7 @@ func TestAddCommand_EndToEnd(t *testing.T) {
 			tt.setupFx(fx)
 
 			// Build context from effects (simulating handler)
-			ctx, err := BuildAddContext(fx, tt.args, tt.noHooks, tt.noOpen, "", false, false)
+			ctx, err := BuildAddContext(fx, tt.args, tt.noHooks, tt.noOpen, "", false, false, tt.moveCurrentChanges)
 			if tt.wantErr && err != nil {
 				// Early error in context building
 				require.Error(t, err)
@@ -801,4 +858,129 @@ func TestAddCommand_EndToEnd(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExecuteMoveCurrentChangesAdd(t *testing.T) {
+	t.Parallel()
+
+	t.Run("moves current changes into a new worktree", func(t *testing.T) {
+		t.Parallel()
+
+		fx := baseTestFx()
+		fx.WorktreePaths["feature"] = "/test/repo-sprout/feature"
+		fx.CreatedStashes["/test/repo"] = "stash-oid"
+
+		ctx := core.AddContext{
+			Branch:               "feature",
+			RepoRoot:             "/test/repo",
+			MainWorktreePath:     "/test/repo",
+			WorktreePath:         "/test/repo-sprout/feature",
+			WorktreeExists:       false,
+			CurrentWorktreeDirty: true,
+			LocalBranchExists:    false,
+			RemoteBranchExists:   false,
+			FromRef:              "origin/main",
+			Config: &config.Config{
+				Hooks: config.HooksConfig{
+					OnCreate: []string{"npm install"},
+				},
+			},
+			IsTrusted:          true,
+			NoHooks:            false,
+			NoOpen:             false,
+			MoveCurrentChanges: true,
+		}
+
+		err := executeMoveCurrentChangesAdd(ctx, fx)
+		require.NoError(t, err)
+
+		require.Len(t, fx.CreateStashInvocations, 1)
+		assert.Equal(t, "/test/repo", fx.CreateStashInvocations[0].Path)
+		assert.Equal(t, "sprout move-current-changes to feature", fx.CreateStashInvocations[0].Message)
+		assert.True(t, fx.CreateStashInvocations[0].IncludeUntracked)
+
+		require.Len(t, fx.GitCommands, 1)
+		assert.Contains(t, fx.GitCommands[0].Args, "worktree")
+		assert.Contains(t, fx.GitCommands[0].Args, "add")
+
+		require.Len(t, fx.ApplyStashInvocations, 1)
+		assert.Equal(t, "/test/repo-sprout/feature", fx.ApplyStashInvocations[0].Path)
+		assert.Equal(t, "stash-oid", fx.ApplyStashInvocations[0].StashOID)
+
+		require.Len(t, fx.DropStashInvocations, 1)
+		assert.Equal(t, "/test/repo", fx.DropStashInvocations[0].Path)
+		assert.Equal(t, "stash-oid", fx.DropStashInvocations[0].StashOID)
+
+		require.Len(t, fx.OpenedPaths, 1)
+		assert.Equal(t, "/test/repo-sprout/feature", fx.OpenedPaths[0])
+
+		require.Len(t, fx.RunHooksInvocations, 1)
+		assert.Equal(t, "/test/repo-sprout/feature", fx.RunHooksInvocations[0].WorktreePath)
+		assert.Equal(t, core.HookTypeOnCreate, fx.RunHooksInvocations[0].HookType)
+	})
+
+	t.Run("fails when there are no changes to move", func(t *testing.T) {
+		t.Parallel()
+
+		fx := baseTestFx()
+		ctx := core.AddContext{
+			Branch:               "feature",
+			RepoRoot:             "/test/repo",
+			MainWorktreePath:     "/test/repo",
+			WorktreePath:         "/test/repo-sprout/feature",
+			Config:               &config.Config{Hooks: config.HooksConfig{}},
+			MoveCurrentChanges:   true,
+			CurrentWorktreeDirty: false,
+		}
+
+		err := executeMoveCurrentChangesAdd(ctx, fx)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no uncommitted changes")
+		assert.Empty(t, fx.CreateStashInvocations)
+	})
+
+	t.Run("keeps the stash when apply fails", func(t *testing.T) {
+		t.Parallel()
+
+		fx := baseTestFx()
+		fx.CreatedStashes["/test/repo"] = "stash-oid"
+		fx.GitCommandErrors["/test/repo-sprout/feature\nstash-apply stash-oid"] = errors.New("conflict")
+
+		ctx := core.AddContext{
+			Branch:               "feature",
+			RepoRoot:             "/test/repo",
+			MainWorktreePath:     "/test/repo",
+			WorktreePath:         "/test/repo-sprout/feature",
+			CurrentWorktreeDirty: true,
+			Config:               &config.Config{Hooks: config.HooksConfig{}},
+			MoveCurrentChanges:   true,
+		}
+
+		err := executeMoveCurrentChangesAdd(ctx, fx)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "stash-oid")
+		assert.Len(t, fx.CreateStashInvocations, 1)
+		assert.Len(t, fx.ApplyStashInvocations, 1)
+		assert.Empty(t, fx.DropStashInvocations)
+		assert.Empty(t, fx.OpenedPaths)
+		assert.Empty(t, fx.RunHooksInvocations)
+	})
+}
+
+func TestFormatMoveCurrentChangesPlan(t *testing.T) {
+	t.Parallel()
+
+	plan := formatMoveCurrentChangesPlan(core.AddContext{
+		RepoRoot:     "/test/repo",
+		WorktreePath: "/test/repo-sprout/feature",
+		Config: &config.Config{
+			Hooks: config.HooksConfig{
+				OnCreate: []string{"npm install"},
+			},
+		},
+	})
+
+	assert.Contains(t, plan, "Stash current changes")
+	assert.Contains(t, plan, "Apply the temporary stash")
+	assert.Contains(t, plan, "Run 1 on_create hook(s)")
 }

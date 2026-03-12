@@ -12,10 +12,11 @@ import (
 )
 
 var (
-	addNoHooksFlag      bool
-	addNoOpenFlag       bool
-	addFromFlag         string
-	addFromCurrentFlag  bool
+	addNoHooksFlag            bool
+	addNoOpenFlag             bool
+	addFromFlag               string
+	addFromCurrentFlag        bool
+	addMoveCurrentChangesFlag bool
 )
 
 const fromPickerValue = "?"
@@ -62,14 +63,13 @@ var addCmd = &cobra.Command{
 		fx := effects.NewRealEffects()
 
 		fromChanged := cmd.Flags().Changed("from")
-		ctx, err := BuildAddContext(fx, args, addNoHooksFlag, addNoOpenFlag, addFromFlag, fromChanged, addFromCurrentFlag)
+		ctx, err := BuildAddContext(fx, args, addNoHooksFlag, addNoOpenFlag, addFromFlag, fromChanged, addFromCurrentFlag, addMoveCurrentChangesFlag)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 
-		plan := core.PlanAddCommand(ctx)
-		runPlan(plan, fx)
+		runAddContext(ctx, fx)
 	},
 }
 
@@ -81,7 +81,7 @@ var addCmd = &cobra.Command{
 //   - fromChanged=true, fromValue=<branch>: use that branch as base
 //
 // fromCurrent=true uses the currently checked-out branch as the base ref.
-func BuildAddContext(fx effects.Effects, args []string, noHooks, noOpen bool, fromValue string, fromChanged bool, fromCurrent bool) (core.AddContext, error) {
+func BuildAddContext(fx effects.Effects, args []string, noHooks, noOpen bool, fromValue string, fromChanged bool, fromCurrent bool, moveCurrentChanges bool) (core.AddContext, error) {
 	// Validate: --from and --from-current are mutually exclusive
 	if fromChanged && fromCurrent {
 		return core.AddContext{}, fmt.Errorf("--from and --from-current cannot be used together")
@@ -177,19 +177,29 @@ func BuildAddContext(fx effects.Effects, args []string, noHooks, noOpen bool, fr
 		}
 	}
 
+	currentWorktreeDirty := false
+	if moveCurrentChanges {
+		currentWorktreeDirty, err = fx.IsWorktreeDirty(repoRoot)
+		if err != nil {
+			return core.AddContext{}, fmt.Errorf("failed to check current worktree status: %w", err)
+		}
+	}
+
 	return core.AddContext{
-		Branch:             branch,
-		RepoRoot:           repoRoot,
-		MainWorktreePath:   mainWorktreePath,
-		WorktreePath:       worktreePath,
-		WorktreeExists:     worktreeExists,
-		LocalBranchExists:  localBranchExists,
-		RemoteBranchExists: remoteBranchExists,
-		FromRef:            fromRef,
-		Config:             cfg,
-		IsTrusted:          isTrusted,
-		NoHooks:            noHooks,
-		NoOpen:             noOpen,
+		Branch:               branch,
+		RepoRoot:             repoRoot,
+		MainWorktreePath:     mainWorktreePath,
+		WorktreePath:         worktreePath,
+		WorktreeExists:       worktreeExists,
+		CurrentWorktreeDirty: currentWorktreeDirty,
+		LocalBranchExists:    localBranchExists,
+		RemoteBranchExists:   remoteBranchExists,
+		FromRef:              fromRef,
+		Config:               cfg,
+		IsTrusted:            isTrusted,
+		NoHooks:              noHooks,
+		NoOpen:               noOpen,
+		MoveCurrentChanges:   moveCurrentChanges,
 	}, nil
 }
 
@@ -244,4 +254,5 @@ func init() {
 	addCmd.Flags().BoolVar(&addNoOpenFlag, "no-open", false, "Skip opening the worktree in an editor")
 	addCmd.Flags().StringVar(&addFromFlag, "from", "", `Base branch to create the new branch from (use "?" for interactive picker)`)
 	addCmd.Flags().BoolVar(&addFromCurrentFlag, "from-current", false, "Use the currently checked-out branch as the base")
+	addCmd.Flags().BoolVar(&addMoveCurrentChangesFlag, "move-current-changes", false, "Move current uncommitted changes into the new worktree")
 }

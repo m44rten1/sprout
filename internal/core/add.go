@@ -17,18 +17,20 @@ const (
 // AddContext contains all inputs needed to plan the add command.
 // Config must not be nil.
 type AddContext struct {
-	Branch             string
-	RepoRoot           string
-	MainWorktreePath   string // Required for hooks
-	WorktreePath       string
-	WorktreeExists     bool
-	LocalBranchExists  bool
-	RemoteBranchExists bool
-	FromRef            string         // Resolved base ref for new branches (e.g. "origin/main", "HEAD", "develop")
-	Config             *config.Config // Must not be nil
-	IsTrusted          bool
-	NoHooks            bool
-	NoOpen             bool
+	Branch               string
+	RepoRoot             string
+	MainWorktreePath     string // Required for hooks
+	WorktreePath         string
+	WorktreeExists       bool
+	CurrentWorktreeDirty bool
+	LocalBranchExists    bool
+	RemoteBranchExists   bool
+	FromRef              string         // Resolved base ref for new branches (e.g. "origin/main", "HEAD", "develop")
+	Config               *config.Config // Must not be nil
+	IsTrusted            bool
+	NoHooks              bool
+	NoOpen               bool
+	MoveCurrentChanges   bool
 }
 
 // PlanAddCommand creates a plan for adding/opening a worktree.
