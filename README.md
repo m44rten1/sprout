@@ -152,7 +152,7 @@ Select the worktree you want to delete, and it's gone. Safe and sound.
 **Also delete the branch:**
 
 ```bash
-# Delete local branch (safe: requires merge into main)
+# Delete local branch (safe: requires merge into the default branch)
 sprout remove -d feature/done
 
 # Force delete local branch (even if not merged)
@@ -200,7 +200,7 @@ Output includes:
   - ✗ (red) Dirty - uncommitted changes
   - ↑ (yellow) Ahead - unpushed commits
   - ↓ (cyan) Behind - needs pull
-  - ↕ (magenta) Unmerged - commits not in main/master
+  - ↕ (magenta) Unmerged - commits not in the repository's default branch
 - Globally aligned columns for easy scanning
 
 Clean worktrees show no indicators. Multiple indicators can appear together (e.g., ✗ ↕).

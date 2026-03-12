@@ -368,14 +368,14 @@ Remove an existing worktree and optionally delete associated branches.
 **Flags:**
 
 - `-f` / `--force`: Force removal even if the worktree has uncommitted changes
-- `-d` / `--delete-branch`: Delete local branch (safe: requires branch to be merged into main)
+- `-d` / `--delete-branch`: Delete local branch (safe: requires branch to be merged into the default branch)
 - `-D`: Force delete local branch even if not merged (implies `-d`)
 - `--delete-remote`: Also delete remote branch (requires `-d` or `-D`)
 - `--dry-run`: Preview what would be deleted without actually doing it
 
 **Branch Deletion Safety:**
 
-The `-d` flag performs a "safe" delete that verifies the branch is merged into main/master before deleting. This prevents accidental loss of unmerged work.
+The `-d` flag performs a "safe" delete that verifies the branch is merged into the repository's default branch before deleting. The default branch name is resolved from Git metadata rather than hardcoded to `main` or `master`, and the merge check uses the local default branch tip so local merges are recognized even before they are pushed.
 
 The `-D` flag skips the merge check and force-deletes the branch, similar to `git branch -D`.
 
@@ -440,7 +440,7 @@ List sprout-managed worktrees with git status indicators.
   - 🔴 Dirty - worktree has uncommitted changes (via `git status --porcelain`)
   - ⬆️ Ahead - worktree has unpushed commits (via `git rev-list --count HEAD...@{upstream}`)
   - ⬇️ Behind - worktree needs to pull (via `git rev-list --count HEAD...@{upstream}`)
-  - 🔀 Unmerged - worktree has commits not in main/master branch
+  - 🔀 Unmerged - worktree has commits not in the repository's default branch
 - Pretty-prints with color styling and aligned columns
 
 **Current repository output:**
@@ -474,7 +474,7 @@ feature/new-feature        /Users/you/.sprout/repo-a1b2c3d4/feature/new-feature/
 
 - **Dirty**: Checked via `git status --porcelain` (non-empty output = dirty)
 - **Ahead/Behind**: Checked via `git rev-list --left-right --count HEAD...@{upstream}` (requires upstream tracking)
-- **Unmerged**: Checked via `git rev-list --count origin/main..HEAD` (or origin/master as fallback)
+- **Unmerged**: Checked against the repository's resolved default branch (prefer local default branch, fall back to the remote-tracking ref when needed)
 - All git operations are non-fatal; errors are silently skipped to avoid breaking the list output
 
 **Flags:**
