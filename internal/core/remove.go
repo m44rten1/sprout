@@ -13,11 +13,9 @@ const (
 	msgWouldRemoveWorktree        = "Would remove worktree at %s"
 	msgDeletedLocalBranch         = "Deleted local branch %s"
 	msgWouldDeleteLocalBranch     = "Would delete local branch %s"
-	msgDeletedLocalBranchForce    = "Deleted local branch %s (was not merged into main)"
 	msgDeletedRemoteBranch        = "Deleted remote branch %s/%s"
 	msgWouldDeleteRemoteBranch    = "Would delete remote branch %s/%s"
 	msgBranchNotFound             = "Branch %s not found, skipping branch deletion"
-	msgBranchNotMerged            = "Branch %s is not merged into main.\nUse -D to force delete, or merge it first."
 	msgRemoteBranchNotFound       = "Remote branch %s/%s not found, skipping"
 	msgNoUpstreamAssumeOrigin     = "No upstream configured for %s, assuming %s/%s"
 	msgUnpushedCommitsWarning     = "Warning: branch %s has unpushed commits"
@@ -53,8 +51,10 @@ type RemoveContext struct {
 
 	// Branch info (populated by shell layer after gathering context)
 	BranchName         string // Branch associated with the worktree
+	DefaultBranch      string // Resolved default branch name (e.g. main, master, dev)
 	BranchExists       bool   // Whether the local branch exists
 	IsMerged           bool   // Whether branch is merged into main
+	MergeCheckError    string // Error determining merge status for safe deletion
 	RemoteName         string // e.g., "origin"
 	RemoteBranch       string // e.g., "feature/login"
 	RemoteBranchExists bool   // Whether the remote branch exists
@@ -178,10 +178,17 @@ func planLocalBranchDeletion(ctx RemoveContext, forceDelete bool) []Action {
 		}
 	}
 
+	if !forceDelete && ctx.MergeCheckError != "" {
+		return []Action{
+			PrintError{Msg: mergeCheckErrorMessage(ctx.BranchName, ctx.MergeCheckError)},
+			Exit{Code: 1},
+		}
+	}
+
 	// Check if branch is merged (unless force delete)
 	if !forceDelete && !ctx.IsMerged {
 		return []Action{
-			PrintError{Msg: fmt.Sprintf(msgBranchNotMerged, ctx.BranchName)},
+			PrintError{Msg: branchNotMergedMessage(ctx.BranchName, ctx.DefaultBranch)},
 			Exit{Code: 1},
 		}
 	}
@@ -198,7 +205,7 @@ func planLocalBranchDeletion(ctx RemoveContext, forceDelete bool) []Action {
 	// Success message
 	if forceDelete && !ctx.IsMerged {
 		actions = append(actions, PrintMessage{
-			Msg: fmt.Sprintf(msgDeletedLocalBranchForce, ctx.BranchName),
+			Msg: deletedLocalBranchForceMessage(ctx.BranchName, ctx.DefaultBranch),
 		})
 	} else {
 		actions = append(actions, PrintMessage{
@@ -207,6 +214,37 @@ func planLocalBranchDeletion(ctx RemoveContext, forceDelete bool) []Action {
 	}
 
 	return actions
+}
+
+func branchNotMergedMessage(branchName, defaultBranch string) string {
+	return fmt.Sprintf(
+		"Branch %s is not merged into %s.\nUse -D to force delete, or merge it first.",
+		branchName,
+		defaultBranchLabel(defaultBranch),
+	)
+}
+
+func deletedLocalBranchForceMessage(branchName, defaultBranch string) string {
+	return fmt.Sprintf(
+		"Deleted local branch %s (was not merged into %s)",
+		branchName,
+		defaultBranchLabel(defaultBranch),
+	)
+}
+
+func mergeCheckErrorMessage(branchName, mergeCheckError string) string {
+	return fmt.Sprintf(
+		"Could not verify whether branch %s is safe to delete.\n%s",
+		branchName,
+		mergeCheckError,
+	)
+}
+
+func defaultBranchLabel(defaultBranch string) string {
+	if defaultBranch == "" {
+		return "the default branch"
+	}
+	return defaultBranch
 }
 
 // planRemoteBranchDeletion creates actions for deleting the remote branch.

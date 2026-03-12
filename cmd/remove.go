@@ -216,7 +216,7 @@ func BuildRemoveContext(fx effects.Effects, args []string, flags RemoveFlags) (c
 //
 // Errors are intentionally swallowed here (best-effort gathering):
 // - If we can't check branch existence, we assume it doesn't exist
-// - If we can't check merge status, we assume not merged (safer)
+// - If we can't check merge status, we keep the error for the planner to report
 // - The planner will handle missing/default values gracefully
 func gatherBranchInfo(fx effects.Effects, ctx core.RemoveContext) core.RemoveContext {
 	// Check if local branch exists (best-effort: assume false on error)
@@ -225,11 +225,20 @@ func gatherBranchInfo(fx effects.Effects, ctx core.RemoveContext) core.RemoveCon
 		ctx.BranchExists = exists
 	}
 
-	// Check if merged into main (best-effort: assume false on error, which is safer)
+	// Gather safe-delete context for the local branch.
 	if ctx.BranchExists {
+		defaultBranch, err := fx.GetDefaultBranch(ctx.RepoRoot)
+		if err == nil {
+			ctx.DefaultBranch = defaultBranch
+		} else {
+			ctx.MergeCheckError = fmt.Sprintf("Could not determine the default branch: %v", err)
+		}
+
 		merged, err := fx.IsBranchMergedIntoMain(ctx.RepoRoot, ctx.BranchName)
 		if err == nil {
 			ctx.IsMerged = merged
+		} else if ctx.MergeCheckError == "" {
+			ctx.MergeCheckError = fmt.Sprintf("Could not determine merge status against %s: %v", ctx.DefaultBranch, err)
 		}
 	}
 

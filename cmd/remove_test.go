@@ -350,3 +350,43 @@ func TestRemoveCommand_EndToEnd(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildRemoveContext_GathersDefaultBranchForSafeDelete(t *testing.T) {
+	fx := effects.NewTestEffects()
+	fx.RepoRoot = "/test/repo"
+	fx.WorktreeRoot = "/test/repo/.sprout"
+	fx.DefaultBranch = "dev"
+	fx.LocalBranches["feature"] = true
+	fx.BranchMergedIntoMain["feature"] = true
+	fx.Worktrees = []git.Worktree{
+		{Path: "/test/repo", Branch: "dev"},
+		{Path: "/test/repo/.sprout/feature", Branch: "feature"},
+	}
+
+	ctx, err := BuildRemoveContext(fx, []string{"feature"}, RemoveFlags{DeleteBranch: true})
+	require.NoError(t, err)
+
+	assert.Equal(t, "dev", ctx.DefaultBranch)
+	assert.True(t, ctx.BranchExists)
+	assert.True(t, ctx.IsMerged)
+	assert.Equal(t, 1, fx.GetDefaultBranchCalls)
+	assert.Equal(t, []string{"/test/repo"}, fx.GetDefaultBranchQueries)
+}
+
+func TestBuildRemoveContext_PreservesMergeCheckError(t *testing.T) {
+	fx := effects.NewTestEffects()
+	fx.RepoRoot = "/test/repo"
+	fx.WorktreeRoot = "/test/repo/.sprout"
+	fx.LocalBranches["feature"] = true
+	fx.GetDefaultBranchErr = fmt.Errorf("origin/HEAD is not set")
+	fx.Worktrees = []git.Worktree{
+		{Path: "/test/repo", Branch: "main"},
+		{Path: "/test/repo/.sprout/feature", Branch: "feature"},
+	}
+
+	ctx, err := BuildRemoveContext(fx, []string{"feature"}, RemoveFlags{DeleteBranch: true})
+	require.NoError(t, err)
+
+	assert.Contains(t, ctx.MergeCheckError, "Could not determine the default branch")
+	assert.Contains(t, ctx.MergeCheckError, "origin/HEAD is not set")
+}

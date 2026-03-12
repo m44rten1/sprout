@@ -216,13 +216,14 @@ func TestPlanRemoveCommand_BranchDeletion(t *testing.T) {
 		{
 			name: "delete local branch with -d (merged)",
 			ctx: RemoveContext{
-				RepoRoot:     "/test/repo",
-				SproutRoot:   "/test/repo/.sprout",
-				TargetPath:   "/test/repo/.sprout/feature",
-				DeleteBranch: true,
-				BranchName:   "feature",
-				BranchExists: true,
-				IsMerged:     true,
+				RepoRoot:      "/test/repo",
+				SproutRoot:    "/test/repo/.sprout",
+				TargetPath:    "/test/repo/.sprout/feature",
+				DeleteBranch:  true,
+				BranchName:    "feature",
+				DefaultBranch: "main",
+				BranchExists:  true,
+				IsMerged:      true,
 			},
 			wantExit: false,
 			assertions: func(t *testing.T, plan Plan) {
@@ -244,13 +245,14 @@ func TestPlanRemoveCommand_BranchDeletion(t *testing.T) {
 		{
 			name: "delete local branch with -d (not merged) fails",
 			ctx: RemoveContext{
-				RepoRoot:     "/test/repo",
-				SproutRoot:   "/test/repo/.sprout",
-				TargetPath:   "/test/repo/.sprout/feature",
-				DeleteBranch: true,
-				BranchName:   "feature",
-				BranchExists: true,
-				IsMerged:     false, // Not merged!
+				RepoRoot:      "/test/repo",
+				SproutRoot:    "/test/repo/.sprout",
+				TargetPath:    "/test/repo/.sprout/feature",
+				DeleteBranch:  true,
+				BranchName:    "feature",
+				DefaultBranch: "dev",
+				BranchExists:  true,
+				IsMerged:      false, // Not merged!
 			},
 			wantExit:     true,
 			wantExitCode: 1,
@@ -260,7 +262,7 @@ func TestPlanRemoveCommand_BranchDeletion(t *testing.T) {
 				foundError := false
 				for _, action := range plan.Actions {
 					if errMsg, ok := action.(PrintError); ok {
-						assert.Contains(t, errMsg.Msg, "not merged into main")
+						assert.Contains(t, errMsg.Msg, "not merged into dev")
 						assert.Contains(t, errMsg.Msg, "Use -D")
 						foundError = true
 						break
@@ -272,13 +274,14 @@ func TestPlanRemoveCommand_BranchDeletion(t *testing.T) {
 		{
 			name: "force delete local branch with -D (not merged) succeeds",
 			ctx: RemoveContext{
-				RepoRoot:     "/test/repo",
-				SproutRoot:   "/test/repo/.sprout",
-				TargetPath:   "/test/repo/.sprout/feature",
-				ForceDelete:  true, // -D flag
-				BranchName:   "feature",
-				BranchExists: true,
-				IsMerged:     false,
+				RepoRoot:      "/test/repo",
+				SproutRoot:    "/test/repo/.sprout",
+				TargetPath:    "/test/repo/.sprout/feature",
+				ForceDelete:   true, // -D flag
+				BranchName:    "feature",
+				DefaultBranch: "dev",
+				BranchExists:  true,
+				IsMerged:      false,
 			},
 			wantExit: false,
 			assertions: func(t *testing.T, plan Plan) {
@@ -293,7 +296,7 @@ func TestPlanRemoveCommand_BranchDeletion(t *testing.T) {
 				// Check message mentions "was not merged"
 				msg, ok := plan.Actions[3].(PrintMessage)
 				require.True(t, ok, "expected PrintMessage at index 3")
-				assert.Contains(t, msg.Msg, "was not merged into main")
+				assert.Contains(t, msg.Msg, "was not merged into dev")
 			},
 		},
 		{
@@ -345,6 +348,7 @@ func TestPlanRemoveCommand_BranchDeletion(t *testing.T) {
 				DeleteBranch:       true,
 				DeleteRemote:       true,
 				BranchName:         "feature",
+				DefaultBranch:      "main",
 				BranchExists:       true,
 				IsMerged:           true,
 				RemoteName:         "origin",
@@ -493,6 +497,32 @@ func TestPlanRemoveCommand_BranchDeletion(t *testing.T) {
 					}
 				}
 				assert.True(t, hasDeleteRemote, "expected DeleteRemoteBranch action despite unpushed commits with -D")
+			},
+		},
+		{
+			name: "safe delete reports merge check failures",
+			ctx: RemoveContext{
+				RepoRoot:        "/test/repo",
+				SproutRoot:      "/test/repo/.sprout",
+				TargetPath:      "/test/repo/.sprout/feature",
+				DeleteBranch:    true,
+				BranchName:      "feature",
+				BranchExists:    true,
+				MergeCheckError: "Could not determine the default branch: origin/HEAD is not set",
+			},
+			wantExit:     true,
+			wantExitCode: 1,
+			assertions: func(t *testing.T, plan Plan) {
+				foundError := false
+				for _, action := range plan.Actions {
+					if errMsg, ok := action.(PrintError); ok {
+						assert.Contains(t, errMsg.Msg, "Could not verify whether branch feature is safe to delete")
+						assert.Contains(t, errMsg.Msg, "Could not determine the default branch")
+						foundError = true
+						break
+					}
+				}
+				assert.True(t, foundError, "expected merge check error message")
 			},
 		},
 	}
